@@ -28,6 +28,9 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Category")
+                        .HasColumnType("text");
+
                     b.Property<int>("CourseType")
                         .HasColumnType("integer");
 
@@ -40,8 +43,20 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("DrivingSchoolId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PdfUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Tags")
+                        .HasColumnType("text");
+
                     b.Property<string>("Title")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("VideoUrl")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
@@ -67,11 +82,17 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("CourseId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
                     b.Property<TimeSpan?>("Duration")
                         .HasColumnType("interval");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("QuizId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -80,6 +101,8 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CourseId");
+
+                    b.HasIndex("QuizId");
 
                     b.ToTable("CourseContents");
                 });
@@ -508,7 +531,14 @@ namespace Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Domain.Entities.Quiz", "Quiz")
+                        .WithMany()
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Course");
+
+                    b.Navigation("Quiz");
                 });
 
             modelBuilder.Entity("Domain.Entities.Document", b =>

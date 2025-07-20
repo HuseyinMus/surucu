@@ -132,5 +132,11 @@ public class AppDbContext : DbContext
             .HasOne(sp => sp.CourseContent)
             .WithMany()
             .HasForeignKey(sp => sp.CourseContentId);
+
+        modelBuilder.Entity<CourseContent>()
+            .HasOne(cc => cc.Quiz)
+            .WithMany()
+            .HasForeignKey(cc => cc.QuizId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 } 

@@ -14,17 +14,8 @@ public class CourseService : ICourseService
         _db = db;
     }
 
-    public async Task<Course> CreateCourseAsync(CourseCreateRequest request)
+    public async Task<Course> CreateCourseAsync(Course course)
     {
-        var course = new Course
-        {
-            Id = Guid.NewGuid(),
-            DrivingSchoolId = request.DrivingSchoolId,
-            Title = request.Title,
-            Description = request.Description,
-            CourseType = Enum.Parse<CourseType>(request.CourseType, true),
-            CreatedAt = DateTime.UtcNow
-        };
         _db.Courses.Add(course);
         await _db.SaveChangesAsync();
         return course;
@@ -38,5 +29,26 @@ public class CourseService : ICourseService
     public async Task<List<Course>> ListCoursesAsync(Guid drivingSchoolId)
     {
         return await _db.Courses.Where(c => c.DrivingSchoolId == drivingSchoolId).ToListAsync();
+    }
+
+    public async Task<Course?> GetCourseByIdAsync(Guid id)
+    {
+        return await _db.Courses.FindAsync(id);
+    }
+
+    public async Task UpdateCourseAsync(Course course)
+    {
+        _db.Courses.Update(course);
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task DeleteCourseAsync(Guid id)
+    {
+        var course = await _db.Courses.FindAsync(id);
+        if (course != null)
+        {
+            _db.Courses.Remove(course);
+            await _db.SaveChangesAsync();
+        }
     }
 } 

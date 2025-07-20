@@ -10,6 +10,8 @@ import LoginPage from "./pages/LoginPage";
 import SignUpPage from "./pages/SignUpPage";
 import LandingPage from "./pages/LandingPage";
 import { useAuth } from "./components/AuthContext";
+import CourseDetailPage from "./pages/CourseDetailPage";
+import QuizzesPage from "./pages/QuizzesPage";
 
 function PrivateRoute({ children }) {
   const { token } = useAuth();
@@ -34,9 +36,11 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="courses" element={<CoursesPage />} />
-        <Route path="exams" element={<ExamsPage />} />
+        <Route path="courses/:id" element={<CourseDetailPage />} />
+        <Route path="exams" element={<QuizzesPage />} />
         <Route path="instructors" element={<InstructorsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="sinavlar" element={<QuizzesPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
