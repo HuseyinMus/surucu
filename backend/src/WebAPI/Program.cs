@@ -56,10 +56,11 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173", "http://192.168.1.78:5068")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials()
+              .SetIsOriginAllowed(origin => true); // Mobile app için tüm origin'leri kabul et
     });
 });
 
@@ -82,7 +83,33 @@ app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(
         Path.Combine(Directory.GetCurrentDirectory(), "uploads")),
-    RequestPath = "/uploads"
+    RequestPath = "/uploads",
+    OnPrepareResponse = context =>
+    {
+        // Video dosyaları için özel headers (sadece eksik olanları ekle)
+        var file = context.File;
+        var fileName = file.Name.ToLowerInvariant();
+        
+        if (fileName.EndsWith(".mp4") || fileName.EndsWith(".avi") || fileName.EndsWith(".mov"))
+        {
+            // Video dosyaları için range support
+            if (!context.Context.Response.Headers.ContainsKey("Accept-Ranges"))
+                context.Context.Response.Headers.Add("Accept-Ranges", "bytes");
+            
+            if (!context.Context.Response.Headers.ContainsKey("Cache-Control"))
+                context.Context.Response.Headers.Add("Cache-Control", "public, max-age=31536000");
+        }
+        
+        // CORS headers for media files (sadece eksik olanları ekle)
+        if (!context.Context.Response.Headers.ContainsKey("Access-Control-Allow-Origin"))
+            context.Context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+        
+        if (!context.Context.Response.Headers.ContainsKey("Access-Control-Allow-Methods"))
+            context.Context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+        
+        if (!context.Context.Response.Headers.ContainsKey("Access-Control-Allow-Headers"))
+            context.Context.Response.Headers.Add("Access-Control-Allow-Headers", "Range");
+    }
 });
 app.UseCors();
 app.UseAuthentication();

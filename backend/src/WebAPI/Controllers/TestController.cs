@@ -121,7 +121,7 @@ public class TestController : ControllerBase
                 LicenseType = "B",
                 RegistrationDate = DateTime.UtcNow,
                 Gender = "Erkek",
-                CurrentStage = "Teori"
+                CurrentStage = StudentStage.Theory
             };
             _db.Students.Add(student);
 

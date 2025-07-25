@@ -504,8 +504,14 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
               const SnackBar(content: Text('Bu ders henüz açılmamış!')),
             );
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${lesson['title']} başlatılıyor...')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LearningPage(
+                  content: lesson,
+                  course: widget.course,
+                ),
+              ),
             );
           }
         },
@@ -953,8 +959,8 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => VideoPlayerPage(
-                  lesson: firstLesson,
+                builder: (context) => LearningPage(
+                  content: firstLesson,
                   course: widget.course,
                 ),
               ),

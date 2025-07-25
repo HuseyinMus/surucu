@@ -268,9 +268,9 @@ public class CoursesController : ControllerBase
                 Title = "Trafik ve Çevre Bilgisi",
                 Description = "Trafik kuralları, işaretler, çevre bilinci, park etme, trafik ışıkları, yol yapısı, vs.",
                 ContentType = ContentType.Video,
-                ContentUrl = "",
+                ContentUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
                 Order = 1,
-                Duration = TimeSpan.FromHours(16)
+                Duration = TimeSpan.FromMinutes(15)
             },
             new CourseContent {
                 Id = Guid.NewGuid(),
@@ -278,9 +278,9 @@ public class CoursesController : ControllerBase
                 Title = "İlk Yardım",
                 Description = "Kaza anı, temel yaşam desteği, kanama, şok, kırık, taşıma teknikleri, vs.",
                 ContentType = ContentType.Video,
-                ContentUrl = "",
+                ContentUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
                 Order = 2,
-                Duration = TimeSpan.FromHours(8)
+                Duration = TimeSpan.FromMinutes(12)
             },
             new CourseContent {
                 Id = Guid.NewGuid(),
@@ -288,19 +288,19 @@ public class CoursesController : ControllerBase
                 Title = "Araç Tekniği (Motor Bilgisi)",
                 Description = "Motor yapısı, bakım, elektrik sistemi, fren, arıza, vs.",
                 ContentType = ContentType.Video,
-                ContentUrl = "",
+                ContentUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
                 Order = 3,
-                Duration = TimeSpan.FromHours(6)
+                Duration = TimeSpan.FromMinutes(10)
             },
             new CourseContent {
                 Id = Guid.NewGuid(),
                 CourseId = courseId,
                 Title = "Trafik Adabı ve Davranış Bilgisi",
                 Description = "Trafik etiği, sorumluluk, stres yönetimi, empati, vs.",
-                ContentType = ContentType.Video,
-                ContentUrl = "",
+                ContentType = ContentType.Text,
+                ContentUrl = "https://www.emniyet.gov.tr/trafik-kurallari",
                 Order = 4,
-                Duration = TimeSpan.FromHours(4)
+                Duration = TimeSpan.FromMinutes(8)
             }
         };
         _db.CourseContents.AddRange(modules);

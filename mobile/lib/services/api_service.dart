@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String baseUrl = 'http://192.168.1.78:5068/api';
+  static const String serverUrl = 'http://192.168.1.78:5068'; // Video dosyaları için
   
   // HTTP Headers
   static Map<String, String> get _headers => {
@@ -432,6 +433,22 @@ class ApiService {
     } catch (e) {
       print('Health check hatası: $e');
       return null;
+    }
+  }
+
+  // Video/media URL'ini tam URL'ye çevir
+  static String getFullMediaUrl(String? relativeUrl) {
+    if (relativeUrl == null || relativeUrl.isEmpty) return '';
+    
+    if (relativeUrl.startsWith('http')) {
+      // Zaten tam URL
+      return relativeUrl;
+    } else if (relativeUrl.startsWith('/')) {
+      // Relative path, server URL'i ekle
+      return '$serverUrl$relativeUrl';
+    } else {
+      // Belirsiz format, uploads klasörü varsay
+      return '$serverUrl/uploads/$relativeUrl';
     }
   }
 } 
