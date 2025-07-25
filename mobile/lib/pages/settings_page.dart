@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -101,6 +102,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Yardım sayfası yakında!')),
                   );
+                },
+              ),
+              _buildListTile(
+                Icons.developer_mode,
+                'API Test',
+                'Backend bağlantı testi',
+                () {
+                  Navigator.pushNamed(context, '/api-test');
                 },
               ),
             ],
@@ -347,9 +356,12 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                await ApiService.logout();
+                if (context.mounted) {
+                  Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red[600],

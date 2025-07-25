@@ -56,13 +56,42 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
-        if (user == null || !user.IsActive)
-            throw new Exception("Invalid credentials.");
-        var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<User>();
-        var result = hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
-        if (result == Microsoft.AspNetCore.Identity.PasswordVerificationResult.Failed)
-            throw new Exception("Invalid credentials.");
+        User? user = null;
+
+        if (request.IsTCLogin)
+        {
+            // TC numarası ile login
+            var student = await _db.Students
+                .Include(s => s.User)
+                .FirstOrDefaultAsync(s => s.TCNumber == request.TCNumber);
+            
+            if (student == null || !student.User.IsActive)
+                throw new Exception("TC kimlik numarası bulunamadı.");
+                
+            user = student.User;
+        }
+        else if (request.IsEmailLogin)
+        {
+            // Email/Password ile login
+            user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            
+            if (user == null || !user.IsActive)
+                throw new Exception("Invalid credentials.");
+                
+            var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<User>();
+            var result = hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password!);
+            
+            if (result == Microsoft.AspNetCore.Identity.PasswordVerificationResult.Failed)
+                throw new Exception("Invalid credentials.");
+        }
+        else
+        {
+            throw new Exception("Email/Password veya TC kimlik numarası gerekli.");
+        }
+
+        if (user == null)
+            throw new Exception("Kullanıcı bulunamadı.");
+
         var token = GenerateJwtToken(user);
         return new AuthResponse
         {
@@ -70,7 +99,8 @@ public class AuthService : IAuthService
             UserId = user.Id,
             FullName = user.FullName,
             Email = user.Email,
-            Role = user.Role.ToString()
+            Role = user.Role.ToString(),
+            DrivingSchoolId = user.DrivingSchoolId
         };
     }
 

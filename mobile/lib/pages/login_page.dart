@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,19 +18,59 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // TC kontrol et ve dashboard'a git
-    if (_tcController.text == "12345678901") {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('TC kimlik numarası hatalı!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    // Loading göster
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // API ile giriş yap
+      final result = await ApiService.login(_tcController.text);
+      
+      // Loading kapat
+      if (context.mounted) Navigator.pop(context);
+      
+      if (result != null) {
+        // Başarılı giriş
+        if (context.mounted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        }
+      } else {
+        // Hatalı giriş
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Giriş bilgileri hatalı!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // API bağlantı hatası - mock data ile devam et
+      if (context.mounted) Navigator.pop(context);
+      
+      if (_tcController.text == "12345678901") {
+        if (context.mounted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Backend bağlantısı yok - Test modunda devam ediliyor'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'quiz_solve_page.dart';
 
 class QuizDetailPage extends StatefulWidget {
   final Map<String, dynamic> quiz;
@@ -608,10 +609,10 @@ class _QuizDetailPageState extends State<QuizDetailPage> with TickerProviderStat
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${widget.quiz['title']} başlatılıyor...'),
-                    backgroundColor: Colors.blue[600],
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => QuizSolvePage(quiz: widget.quiz),
                   ),
                 );
               },

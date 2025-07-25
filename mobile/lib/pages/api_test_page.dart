@@ -19,11 +19,21 @@ class _ApiTestPageState extends State<ApiTestPage> {
     });
 
     try {
-      final isConnected = await ApiService.testConnection();
-      setState(() {
-        _status = isConnected ? 'Bağlantı başarılı!' : 'Bağlantı başarısız!';
-        _isLoading = false;
-      });
+      final healthData = await ApiService.healthCheck();
+      if (healthData != null) {
+        setState(() {
+          _status = 'Bağlantı başarılı!\n'
+                   'Durum: ${healthData['status']}\n'
+                   'Mesaj: ${healthData['message']}\n'
+                   'Zaman: ${healthData['timestamp']}';
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _status = 'Bağlantı başarısız!';
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() {
         _status = 'Hata: $e';

@@ -89,4 +89,81 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// Test verisi oluştur (sadece development ortamında)
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await SeedTestDataAsync(db);
+}
+
 app.Run();
+
+// Test verisi oluşturma metodu
+async Task SeedTestDataAsync(AppDbContext db)
+{
+    try
+    {
+        // Database oluştur (eğer yoksa)
+        await db.Database.EnsureCreatedAsync();
+
+        // Test driving school oluştur
+        if (!await db.DrivingSchools.AnyAsync())
+        {
+            var drivingSchool = new Domain.Entities.DrivingSchool
+            {
+                Id = Guid.NewGuid(),
+                Name = "Esen Sürücü Kursu",
+                Address = "İstanbul, Türkiye",
+                Phone = "555-123-4567",
+                Email = "info@esensurucu.com",
+                CreatedAt = DateTime.UtcNow
+            };
+            db.DrivingSchools.Add(drivingSchool);
+            await db.SaveChangesAsync();
+
+            // Test user oluştur
+            var user = new Domain.Entities.User
+            {
+                Id = Guid.NewGuid(),
+                FullName = "Ahmet Yılmaz",
+                Email = "ahmet.yilmaz@email.com",
+                Role = Domain.Entities.UserRole.Student,
+                DrivingSchoolId = drivingSchool.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<Domain.Entities.User>();
+            user.PasswordHash = hasher.HashPassword(user, "password123");
+            
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+
+            // Test student oluştur
+            var student = new Domain.Entities.Student
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                DrivingSchoolId = drivingSchool.Id,
+                TCNumber = "12345678901", // Test TC numarası
+                BirthDate = DateTime.UtcNow.AddYears(-25),
+                LicenseType = "B",
+                RegistrationDate = DateTime.UtcNow,
+                CurrentStage = Domain.Entities.StudentStage.Theory,
+                PhoneNumber = "555-987-6543",
+                Gender = "Erkek"
+            };
+            
+            db.Students.Add(student);
+            await db.SaveChangesAsync();
+            
+            Console.WriteLine("Test verisi başarıyla oluşturuldu!");
+            Console.WriteLine("Test TC: 12345678901");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Test verisi oluşturma hatası: {ex.Message}");
+    }
+}

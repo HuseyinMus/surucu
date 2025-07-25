@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://localhost:7154/api';
+  static const String baseUrl = 'http://192.168.1.78:5068/api';
   
   // HTTP Headers
   static Map<String, String> get _headers => {
@@ -45,8 +45,7 @@ class ApiService {
         Uri.parse('$baseUrl/auth/login'),
         headers: _headers,
         body: jsonEncode({
-          'email': '$tc@example.com', // TC'yi email formatına çevir
-          'password': 'password123', // Sabit şifre
+          'tcNumber': tc, // TC numarası ile login
         }),
       );
 
@@ -195,11 +194,11 @@ class ApiService {
   }
 
   // ÖĞRENCİ PROGRESS
-  static Future<Map<String, dynamic>?> getStudentProgress() async {
+  static Future<Map<String, dynamic>?> getStudentProgress(String studentId, String courseId) async {
     try {
       final headers = await _authenticatedHeaders;
       final response = await http.get(
-        Uri.parse('$baseUrl/students/progress'),
+        Uri.parse('$baseUrl/progress/summary/$studentId/$courseId'),
         headers: headers,
       );
 
@@ -249,17 +248,22 @@ class ApiService {
     }
   }
 
-  // USER PROFİL
+  // USER PROFİL - Test için basit data döndür
   static Future<Map<String, dynamic>?> getUserProfile() async {
     try {
-      final headers = await _authenticatedHeaders;
-      final response = await http.get(
-        Uri.parse('$baseUrl/users/profile'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+      // Token varsa kullanıcı giriş yapmış demektir
+      final token = await getToken();
+      if (token != null) {
+        // Mock profile data - gerçek endpoint bulunduğunda güncellenecek
+        return {
+          'id': 'user-123',
+          'fullName': 'Ahmet Yılmaz',
+          'email': 'ahmet.yilmaz@email.com',
+          'role': 'Student',
+          'tcNumber': '12345678901',
+          'phone': '555-123-4567',
+          'drivingSchoolId': 'school-123'
+        };
       }
       return null;
     } catch (e) {
@@ -285,6 +289,24 @@ class ApiService {
     } catch (e) {
       print('API bağlantı testi hatası: $e');
       return false;
+    }
+  }
+
+  // HEALTH CHECK WITH DATABASE
+  static Future<Map<String, dynamic>?> healthCheck() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/health'),
+        headers: _headers,
+      );
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Health check hatası: $e');
+      return null;
     }
   }
 } 

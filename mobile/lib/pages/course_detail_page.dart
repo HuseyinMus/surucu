@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'video_player_page.dart';
 
 class CourseDetailPage extends StatefulWidget {
   final Map<String, dynamic> course;
@@ -874,19 +875,21 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
         height: 50,
         child: ElevatedButton(
           onPressed: () {
-            if (isCompleted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Kurs tekrar izleniyor...')),
-              );
-            } else if (isStarted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Kurs devam ediyor...')),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Kurs başlatılıyor...')),
-              );
-            }
+            // İlk dersi başlat
+            final firstLesson = lessons.isNotEmpty ? lessons[0] : {
+              'title': 'İlk Ders',
+              'duration': '12:30',
+              'type': 'video',
+            };
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerPage(
+                  lesson: firstLesson,
+                  course: widget.course,
+                ),
+              ),
+            );
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue[600],
