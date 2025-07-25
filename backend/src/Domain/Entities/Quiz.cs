@@ -10,6 +10,7 @@ public class Quiz : ITenantEntity
     public string? Description { get; set; }
     public int TotalPoints { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? Status { get; set; } = "active"; // active, inactive, draft
     // Navigation properties
     public Course Course { get; set; } = null!;
     public ICollection<QuizQuestion> Questions { get; set; } = new List<QuizQuestion>();

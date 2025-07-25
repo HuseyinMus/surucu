@@ -77,7 +77,8 @@ namespace Infrastructure.Migrations
 
                     b.Property<string>("ContentUrl")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasAnnotation("Relational:JsonPropertyName", "contentUrl");
 
                     b.Property<Guid>("CourseId")
                         .HasColumnType("uuid");
@@ -185,6 +186,21 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("DrivingSchoolId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Experience")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("HireDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<double>("Rating")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Specialization")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
@@ -281,6 +297,9 @@ namespace Infrastructure.Migrations
 
                     b.Property<Guid>("DrivingSchoolId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .HasColumnType("text");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -421,8 +440,17 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("DrivingSchoolId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Gender")
+                        .HasColumnType("text");
+
                     b.Property<string>("LicenseType")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumber")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("RegistrationDate")
@@ -445,20 +473,91 @@ namespace Infrastructure.Migrations
                     b.ToTable("Students");
                 });
 
+            modelBuilder.Entity("Domain.Entities.StudentAnalytics", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("AverageQuizScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FocusScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LearningStyle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("LessonsCompleted")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreferredTimeSlot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("QuizzesTaken")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TotalAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalTimeSpent")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("StudentAnalytics");
+                });
+
             modelBuilder.Entity("Domain.Entities.StudentProgress", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("CourseContentId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastAccessed")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
 
                     b.Property<int>("Progress")
                         .HasColumnType("integer");
 
+                    b.Property<int>("QuizScore")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("TimeSpent")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("ViewedAt")
                         .HasColumnType("timestamp with time zone");
@@ -705,6 +804,25 @@ namespace Infrastructure.Migrations
                     b.Navigation("DrivingSchool");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Domain.Entities.StudentAnalytics", b =>
+                {
+                    b.HasOne("Domain.Entities.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("Domain.Entities.StudentProgress", b =>

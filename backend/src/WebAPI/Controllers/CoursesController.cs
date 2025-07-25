@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Infrastructure.Persistence;
+using System.Text.Json.Serialization;
 
 namespace WebAPI.Controllers;
 
@@ -86,9 +87,37 @@ public class CoursesController : ControllerBase
         if (claim != null && Guid.TryParse(claim, out var parsedId))
             drivingSchoolId = parsedId;
         else
-            drivingSchoolId = Guid.Empty; // veya bir default/anonim tenant
-        var courses = await _courseService.ListCoursesAsync(drivingSchoolId);
-        return Ok(courses);
+            drivingSchoolId = Guid.Empty;
+        var courses = await _db.Courses
+            .Include(c => c.CourseContents)
+            .Where(c => c.DrivingSchoolId == drivingSchoolId)
+            .ToListAsync();
+
+        // Sadece temel alanları ve courseContents'in temel alanlarını döndür
+        var result = courses.Select(c => new {
+            c.Id,
+            c.Title,
+            c.Description,
+            c.Category,
+            c.CourseType,
+            c.CreatedAt,
+            c.DrivingSchoolId,
+            c.VideoUrl,
+            c.ImageUrl,
+            c.PdfUrl,
+            courseContents = c.CourseContents.Select(cc => new {
+                cc.Id,
+                cc.Title,
+                cc.Description,
+                cc.ContentType,
+                cc.ContentUrl,
+                cc.Order,
+                cc.Duration,
+                cc.QuizId
+            })
+        });
+
+        return Ok(result);
     }
 
     [HttpGet("{id}/contents")]
@@ -115,23 +144,69 @@ public class CoursesController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetById([FromRoute] Guid id)
     {
-        var course = await _db.Courses.Include(c => c.CourseContents).FirstOrDefaultAsync(c => c.Id == id);
+        var course = await _db.Courses
+            .Include(c => c.CourseContents)
+            .FirstOrDefaultAsync(c => c.Id == id);
         if (course == null)
             return NotFound();
-        return Ok(course);
+
+        // Sadece temel alanları ve courseContents'in temel alanlarını döndür
+        var result = new {
+            course.Id,
+            course.Title,
+            course.Description,
+            course.Category,
+            course.CourseType,
+            course.CreatedAt,
+            course.DrivingSchoolId,
+            course.VideoUrl,
+            course.ImageUrl,
+            course.PdfUrl,
+            courseContents = course.CourseContents.Select(cc => new {
+                cc.Id,
+                cc.Title,
+                cc.Description,
+                cc.ContentType,
+                cc.ContentUrl,
+                cc.Order,
+                cc.Duration,
+                cc.QuizId
+            })
+        };
+
+        return Ok(result);
     }
 
     [HttpPost("{courseId}/contents")]
     [Authorize(Roles = "Admin,Instructor")]
-    public async Task<IActionResult> AddContent([FromRoute] Guid courseId, [FromBody] CourseContent content)
+    public async Task<IActionResult> AddContent([FromRoute] Guid courseId, [FromBody] CourseContentCreateRequest request)
     {
         var course = await _db.Courses.Include(c => c.CourseContents).FirstOrDefaultAsync(c => c.Id == courseId);
         if (course == null) return NotFound();
-        content.Id = Guid.NewGuid();
-        content.CourseId = courseId;
+        var content = new CourseContent
+        {
+            Id = Guid.NewGuid(),
+            CourseId = courseId,
+            Title = request.Title,
+            Description = request.Description,
+            ContentUrl = request.ContentUrl,
+            ContentType = Enum.Parse<ContentType>(request.ContentType, true),
+            Order = request.Order,
+            Duration = string.IsNullOrEmpty(request.Duration) ? null : TimeSpan.Parse(request.Duration),
+            QuizId = request.QuizId
+        };
         _db.CourseContents.Add(content);
         await _db.SaveChangesAsync();
-        return Ok(content);
+        return Ok(new {
+            content.Id,
+            content.Title,
+            content.Description,
+            content.ContentType,
+            content.ContentUrl,
+            content.Order,
+            content.Duration,
+            content.QuizId
+        });
     }
 
     [HttpPut("{courseId}/contents/{contentId}")]

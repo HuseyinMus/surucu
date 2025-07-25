@@ -20,6 +20,9 @@ public class Student : ITenantEntity
     public string LicenseType { get; set; } = null!;
     public DateTime RegistrationDate { get; set; } = DateTime.UtcNow;
     public StudentStage CurrentStage { get; set; } = StudentStage.Registered;
+    public string? PhoneNumber { get; set; }
+    public string? Gender { get; set; }
+    public string? Notes { get; set; }
     // Navigation properties
     public User User { get; set; } = null!;
     public DrivingSchool DrivingSchool { get; set; } = null!;

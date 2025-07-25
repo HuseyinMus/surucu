@@ -1,618 +1,760 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthContext";
+import { 
+  Play, 
+  BookOpen, 
+  FileText, 
+  Clock, 
+  Users, 
+  Star, 
+  ChevronRight, 
+  ArrowLeft,
+  Plus,
+  Edit,
+  Trash2,
+  Download,
+  Eye,
+  CheckCircle,
+  Circle,
+  Video,
+  File,
+  Type,
+  Calendar,
+  BarChart3,
+  Award,
+  Share2,
+  Bookmark,
+  BookmarkPlus
+} from "lucide-react";
 
 export default function CourseDetailPage() {
   const { id } = useParams();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const isAdminOrInstructor = user && (user.role === "Admin" || user.role === "Instructor");
+  
   const [course, setCourse] = useState(null);
+  const [contents, setContents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editMode, setEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({ title: "", description: "", courseType: "Theory", tags: "" });
-  const [success, setSuccess] = useState("");
-  const [tab, setTab] = useState("info");
-  const [contents, setContents] = useState([]);
-  const [contentsLoading, setContentsLoading] = useState(false);
-  const [contentsError, setContentsError] = useState("");
-  const [showLessonForm, setShowLessonForm] = useState(false);
-  const [editingLesson, setEditingLesson] = useState(null);
-  const [lessonForm, setLessonForm] = useState({ title: "", description: "", contentType: "Video", contentUrl: "", order: 1, duration: "", quizId: "" });
-  const [lessonFormError, setLessonFormError] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [showQuizForm, setShowQuizForm] = useState(false);
-  const [quizForm, setQuizForm] = useState({ title: '', description: '', totalPoints: 0 });
-  const [quizFormError, setQuizFormError] = useState('');
-  const [quizLessonId, setQuizLessonId] = useState(null);
-  const [showQuestionForm, setShowQuestionForm] = useState(false);
-  const [questionForm, setQuestionForm] = useState({ questionText: '', questionType: 'MultipleChoice', options: [{ text: '', isCorrect: false }], });
-  const [questionFormError, setQuestionFormError] = useState('');
-  const [currentQuizId, setCurrentQuizId] = useState(null);
-  const [quizzes, setQuizzes] = useState([]);
-  const [showQuizAddModal, setShowQuizAddModal] = useState(false);
-  const [newQuizForm, setNewQuizForm] = useState({ title: '', description: '', totalPoints: 0 });
-  const [newQuizError, setNewQuizError] = useState('');
-  const [lessonQuizzes, setLessonQuizzes] = useState({});
+  const [activeTab, setActiveTab] = useState("overview");
+  const [selectedContent, setSelectedContent] = useState(null);
+  const [showContentModal, setShowContentModal] = useState(false);
+  const [progress, setProgress] = useState({});
+
+  const isAdminOrInstructor = user && (user.role === "Admin" || user.role === "Instructor");
 
   useEffect(() => {
-    async function fetchCourse() {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch(`http://192.168.1.78:5068/api/courses/${id}`);
-        if (!res.ok) throw new Error("Kurs bulunamadı");
-        const data = await res.json();
-        setCourse(data);
-        setEditForm({
-          title: data.title || "",
-          description: data.description || "",
-          courseType: data.courseType === 0 ? "Theory" : data.courseType === 1 ? "Practice" : data.courseType || "Theory",
-          tags: data.tags ? data.tags.join(", ") : ""
-        });
-      } catch {
-        setError("Kurs bulunamadı veya sunucu hatası.");
-      }
-      setLoading(false);
-    }
-    fetchCourse();
+    fetchCourseDetails();
   }, [id]);
 
-  useEffect(() => {
-    if (tab === "lessons") {
-      setContentsLoading(true);
-      setContentsError("");
-      fetch(`http://192.168.1.78:5068/api/courses/${id}/contents`)
-        .then(res => res.json())
-        .then(data => setContents(data))
-        .catch(() => setContentsError("Dersler alınamadı."))
-        .finally(() => setContentsLoading(false));
-    }
-  }, [tab, id]);
-
-  useEffect(() => {
-    if (showLessonForm) {
-      fetch("http://192.168.1.78:5068/api/quizzes")
-        .then(res => res.json())
-        .then(data => setQuizzes(data))
-        .catch(() => setQuizzes([]));
-    }
-  }, [showLessonForm]);
-
-  useEffect(() => {
-    if (tab === "lessons") {
-      fetch("http://192.168.1.78:5068/api/quizzes")
-        .then(res => res.json())
-        .then(data => {
-          // Her dersin id'sine göre quizleri grupla
-          const map = {};
-          data.forEach(q => {
-            if (q.courseContentId) {
-              if (!map[q.courseContentId]) map[q.courseContentId] = [];
-              map[q.courseContentId].push(q);
-            }
-          });
-          setLessonQuizzes(map);
-        })
-        .catch(() => setLessonQuizzes({}));
-    }
-  }, [tab, contentsLoading]);
-
-  async function handleDelete() {
-    if (!window.confirm("Bu kursu silmek istediğinize emin misiniz?")) return;
-    const res = await fetch(`http://192.168.1.78:5068/api/courses/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      navigate("/panel/courses");
-    } else {
-      alert("Kurs silinemedi!");
-    }
-  }
-
-  async function handleEditSubmit(e) {
-    e.preventDefault();
-    setSuccess("");
-    const res = await fetch(`http://192.168.1.78:5068/api/courses/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...editForm,
-        tags: editForm.tags ? editForm.tags.split(",").map(t => t.trim()).filter(Boolean) : []
-      })
-    });
-    if (res.ok) {
-      setSuccess("Kurs başarıyla güncellendi!");
-      setEditMode(false);
-      const updated = await res.json();
-      setCourse(updated);
-    } else {
-      setSuccess("");
-      alert("Kurs güncellenemedi!");
-    }
-  }
-
-  function openAddLesson() {
-    setEditingLesson(null);
-    setLessonForm({ title: "", description: "", contentType: "Video", contentUrl: "", order: 1, duration: "", quizId: "" });
-    setShowLessonForm(true);
-  }
-  function openEditLesson(lesson) {
-    setEditingLesson(lesson);
-    setLessonForm({
-      title: lesson.title || "",
-      description: lesson.description || "",
-      contentType: lesson.contentType || "Video",
-      contentUrl: lesson.contentUrl || "",
-      order: lesson.order || 1,
-      duration: lesson.duration || "",
-      quizId: lesson.quizId || ""
-    });
-    setShowLessonForm(true);
-  }
-  async function handleLessonFormSubmit(e) {
-    e.preventDefault();
-    setLessonFormError("");
-    if (!lessonForm.title) { setLessonFormError("Ders başlığı zorunlu"); return; }
-    if (!lessonForm.contentType) { setLessonFormError("İçerik türü zorunlu"); return; }
-    if (!lessonForm.contentUrl) { setLessonFormError("İçerik bağlantısı zorunlu"); return; }
-    const method = editingLesson ? "PUT" : "POST";
-    const url = editingLesson
-      ? `http://192.168.1.78:5068/api/courses/${id}/contents/${editingLesson.id}`
-      : `http://192.168.1.78:5068/api/courses/${id}/contents`;
-    const body = {
-      ...lessonForm,
-      contentType: lessonForm.contentType,
-      order: Number(lessonForm.order),
-      duration: lessonForm.duration,
-      quizId: lessonForm.quizId || null
-    };
+  const fetchCourseDetails = async () => {
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      if (res.ok) {
-        setShowLessonForm(false);
-        setEditingLesson(null);
-        setLessonForm({ title: "", description: "", contentType: "Video", contentUrl: "", order: 1, duration: "", quizId: "" });
-        setContentsLoading(true); // Yeniden yükle
-        fetch(`http://192.168.1.78:5068/api/courses/${id}/contents`).then(res => res.json()).then(data => setContents(data)).finally(() => setContentsLoading(false));
-      } else {
-        setLessonFormError("Ders kaydedilemedi!");
+      setLoading(true);
+      const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+      
+      // Kurs detaylarını al
+      const courseRes = await fetch(`http://192.168.1.78:5068/api/courses/${id}`, { headers });
+      if (!courseRes.ok) throw new Error("Kurs bulunamadı");
+      const courseData = await courseRes.json();
+      setCourse(courseData);
+
+      // Kurs içeriklerini al
+      const contentsRes = await fetch(`http://192.168.1.78:5068/api/courses/${id}/contents`, { headers });
+      if (contentsRes.ok) {
+        const contentsData = await contentsRes.json();
+        setContents(contentsData);
       }
-    } catch {
-      setLessonFormError("Sunucu hatası!");
-    }
-  }
-  async function handleDeleteLesson(lesson) {
-    if (!window.confirm("Bu dersi silmek istediğinize emin misiniz?")) return;
-    try {
-      const res = await fetch(`http://192.168.1.78:5068/api/courses/${id}/contents/${lesson.id}`, { method: "DELETE" });
-      if (res.ok) {
-        setContentsLoading(true);
-        fetch(`http://192.168.1.78:5068/api/courses/${id}/contents`).then(res => res.json()).then(data => setContents(data)).finally(() => setContentsLoading(false));
-      } else {
-        alert("Ders silinemedi!");
+
+      // Öğrenci ilerlemesini al (eğer öğrenci ise)
+      if (user?.role === "Student") {
+        const progressRes = await fetch(`http://192.168.1.78:5068/api/students/progress/${id}`, { headers });
+        if (progressRes.ok) {
+          const progressData = await progressRes.json();
+          setProgress(progressData);
+        }
       }
-    } catch {
-      alert("Sunucu hatası!");
+
+    } catch (err) {
+      setError("Kurs detayları yüklenemedi");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleContentClick = (content) => {
+    setSelectedContent(content);
+    setShowContentModal(true);
+  };
+
+  const getContentIcon = (contentType) => {
+    switch (contentType) {
+      case 0: return <Video size={20} className="text-blue-500" />;
+      case 1: return <Type size={20} className="text-green-500" />;
+      case 2: return <File size={20} className="text-red-500" />;
+      default: return <FileText size={20} className="text-gray-500" />;
+    }
+  };
+
+  const getContentTypeText = (contentType) => {
+    switch (contentType) {
+      case 0: return "Video";
+      case 1: return "Metin";
+      case 2: return "PDF";
+      default: return "İçerik";
+    }
+  };
+
+  const formatDuration = (duration) => {
+    if (!duration) return "Süre belirtilmemiş";
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">Kurs yükleniyor...</p>
+        </div>
+      </div>
+    );
   }
 
-  async function handleFileUpload(e) {
-    setUploading(true);
-    setUploadError("");
-    const file = e.target.files[0];
-    if (!file) return;
-    const formData = new FormData();
-    if (lessonForm.contentType === "Video") formData.append("video", file);
-    if (lessonForm.contentType === "PDF") formData.append("pdf", file);
-    if (lessonForm.contentType === "Text") formData.append("image", file); // Text için resim yüklenirse
-    try {
-      const res = await fetch("http://192.168.1.78:5068/api/courses/upload-media", {
-        method: "POST",
-        body: formData
-      });
-      const data = await res.json();
-      if (data.videoUrl) setLessonForm(f => ({ ...f, contentUrl: data.videoUrl }));
-      if (data.pdfUrl) setLessonForm(f => ({ ...f, contentUrl: data.pdfUrl }));
-      if (data.imageUrl) setLessonForm(f => ({ ...f, contentUrl: data.imageUrl }));
-    } catch {
-      setUploadError("Dosya yüklenemedi!");
-    }
-    setUploading(false);
+  if (error || !course) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <BookOpen size={64} className="mx-auto text-gray-300 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Kurs bulunamadı</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => navigate("/panel/courses")}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Kurslara Dön
+          </button>
+        </div>
+      </div>
+    );
   }
-
-  function openQuizForm(lessonId) {
-    setQuizLessonId(lessonId);
-    setQuizForm({ title: '', description: '', totalPoints: 0 });
-    setQuizFormError('');
-    setShowQuizForm(true);
-  }
-  async function handleQuizFormSubmit(e) {
-    e.preventDefault();
-    setQuizFormError('');
-    if (!quizForm.title) { setQuizFormError('Quiz başlığı zorunlu'); return; }
-    try {
-      const res = await fetch('http://192.168.1.78:5068/api/quizzes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: quizForm.title,
-          description: quizForm.description,
-          totalPoints: Number(quizForm.totalPoints),
-          courseId: id,
-          courseContentId: quizLessonId
-        })
-      });
-      if (res.ok) {
-        const quiz = await res.json();
-        // Dersi güncelle, quizId'yi ekle
-        await fetch(`http://192.168.1.78:5068/api/courses/${id}/contents/${quizLessonId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quizId: quiz.id })
-        });
-        setShowQuizForm(false);
-        setCurrentQuizId(quiz.id);
-        setShowQuestionForm(true);
-        setContentsLoading(true);
-        fetch(`http://192.168.1.78:5068/api/courses/${id}/contents`).then(res => res.json()).then(data => setContents(data)).finally(() => setContentsLoading(false));
-      } else {
-        setQuizFormError('Quiz eklenemedi!');
-      }
-    } catch {
-      setQuizFormError('Sunucu hatası!');
-    }
-  }
-  function openQuestionForm(quizId) {
-    setCurrentQuizId(quizId);
-    setQuestionForm({ questionText: '', questionType: 'MultipleChoice', options: [{ text: '', isCorrect: false }] });
-    setShowQuestionForm(true);
-    setQuestionFormError('');
-  }
-  function handleOptionChange(i, field, value) {
-    setQuestionForm(f => {
-      const options = [...f.options];
-      if (field === 'isCorrect') options[i][field] = value;
-      else options[i][field] = value;
-      return { ...f, options };
-    });
-  }
-  function addOption() {
-    setQuestionForm(f => ({ ...f, options: [...f.options, { text: '', isCorrect: false }] }));
-  }
-  function removeOption(i) {
-    setQuestionForm(f => ({ ...f, options: f.options.filter((_, idx) => idx !== i) }));
-  }
-  async function handleQuestionFormSubmit(e) {
-    e.preventDefault();
-    setQuestionFormError('');
-    if (!questionForm.questionText) { setQuestionFormError('Soru metni zorunlu'); return; }
-    if (questionForm.options.length < 2) { setQuestionFormError('En az 2 şık olmalı'); return; }
-    if (!questionForm.options.some(o => o.isCorrect)) { setQuestionFormError('En az 1 doğru şık seçilmeli'); return; }
-    try {
-      const res = await fetch(`http://192.168.1.78:5068/api/quizzes/${currentQuizId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          questionText: questionForm.questionText,
-          questionType: questionForm.questionType,
-          options: questionForm.options.map(o => ({ optionText: o.text, isCorrect: o.isCorrect }))
-        })
-      });
-      if (res.ok) {
-        setShowQuestionForm(false);
-        setQuestionForm({ questionText: '', questionType: 'MultipleChoice', options: [{ text: '', isCorrect: false }] });
-      } else {
-        setQuestionFormError('Soru eklenemedi!');
-      }
-    } catch {
-      setQuestionFormError('Sunucu hatası!');
-    }
-  }
-
-  if (loading) return <div className="p-8 text-center text-lg">Yükleniyor...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-  if (!course) return null;
 
   return (
-    <div className="max-w-2xl mx-auto bg-white dark:bg-[#161B22] rounded-2xl shadow p-8 mt-8">
-      <button onClick={() => navigate(-1)} className="mb-4 text-blue-600 underline">← Geri</button>
-      {/* Sekmeler */}
-      <div className="flex gap-4 mb-6">
-        <button onClick={() => setTab("info")} className={`px-4 py-2 rounded-xl font-semibold ${tab === "info" ? "bg-blue-600 text-white" : "bg-gray-100 dark:bg-[#23272F] text-blue-600"}`}>Genel Bilgi</button>
-        <button onClick={() => setTab("lessons")} className={`px-4 py-2 rounded-xl font-semibold ${tab === "lessons" ? "bg-blue-600 text-white" : "bg-gray-100 dark:bg-[#23272F] text-blue-600"}`}>Dersler</button>
-      </div>
-      {tab === "info" && (
-        <>
-          {isAdminOrInstructor && (
-            <div className="flex gap-4 mb-4">
-              <button onClick={() => setEditMode(true)} className="bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded">Düzenle</button>
-              <button onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">Sil</button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate("/panel/courses")}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ArrowLeft size={20} className="text-gray-600" />
+              </button>
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">{course.title}</h1>
+                <p className="text-sm text-gray-600">Kurs Detayları</p>
+              </div>
             </div>
-          )}
-          {success && <div className="text-green-600 mb-2">{success}</div>}
-          {editMode ? (
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div>
-                <label className="block mb-1">Kurs Adı *</label>
-                <input name="title" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} className="w-full p-2 rounded border" />
-              </div>
-              <div>
-                <label className="block mb-1">Açıklama</label>
-                <input name="description" value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="w-full p-2 rounded border" />
-              </div>
-              <div>
-                <label className="block mb-1">Kurs Türü *</label>
-                <select name="courseType" value={editForm.courseType} onChange={e => setEditForm(f => ({ ...f, courseType: e.target.value }))} className="w-full p-2 rounded border">
-                  <option value="Theory">Teorik</option>
-                  <option value="Practice">Pratik</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-1">Etiketler (virgülle ayırın)</label>
-                <input name="tags" value={editForm.tags || ""} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))} className="w-full p-2 rounded border" placeholder="örn. trafik, ilk yardım, direksiyon" />
-                <div className="text-xs text-gray-400 mt-1">Birden fazla etiket için virgül kullanın.</div>
-              </div>
-              <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow hover:bg-blue-700 transition">Kaydet</button>
-            </form>
-          ) : (
-            <>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-2">{course.title}</div>
-              <div className="text-gray-600 dark:text-gray-300 mb-4">{course.description}</div>
-              {course.imageUrl && <img src={course.imageUrl} alt="Kurs görseli" className="rounded-xl mb-4" style={{ maxWidth: 320 }} />}
-              {course.videoUrl && <video src={course.videoUrl} controls className="rounded-xl mb-4" style={{ maxWidth: 400 }} />}
-              {course.pdfUrl && <a href={course.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mb-4 block">PDF'i Görüntüle</a>}
-              {course.tags && course.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {course.tags.map((tag, i) => (
-                    <span key={i} className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-1">{tag}</span>
-                  ))}
-                </div>
+            
+            <div className="flex items-center space-x-3">
+              {isAdminOrInstructor && (
+                <>
+                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <Edit size={20} className="text-gray-600" />
+                  </button>
+                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <Trash2 size={20} className="text-red-600" />
+                  </button>
+                </>
               )}
-              <div className="text-xs text-gray-400 mt-2">Oluşturulma: {course.createdAt ? new Date(course.createdAt).toLocaleString('tr-TR') : '-'}</div>
-            </>
-          )}
-        </>
-      )}
-      {tab === "lessons" && (
-        <div>
-          {isAdminOrInstructor && (
-            <button onClick={openAddLesson} className="mb-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Ders Ekle</button>
-          )}
-          {contentsLoading ? (
-            <div className="text-center text-blue-600">Dersler yükleniyor...</div>
-          ) : contentsError ? (
-            <div className="text-center text-red-500">{contentsError}</div>
-          ) : contents.length === 0 ? (
-            <div className="text-center text-gray-500">Bu kursa ait ders yok.</div>
-          ) : (
-            <div className="space-y-6">
-              {contents.map((lesson, i) => (
-                <div key={lesson.id} className="bg-gray-50 dark:bg-[#23272F] rounded-xl p-4 shadow">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg font-bold text-blue-600">{i + 1}. {lesson.title}</span>
-                    <span className="text-xs bg-blue-100 text-blue-600 rounded-full px-2 py-1 ml-2">{lesson.contentType}</span>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <Share2 size={20} className="text-gray-600" />
+              </button>
+              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <BookmarkPlus size={20} className="text-gray-600" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Ana İçerik */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Kurs Hero Section */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="relative h-64 bg-gradient-to-br from-blue-500 to-blue-600">
+                {course.imageUrl ? (
+                  <img
+                    src={`http://192.168.1.78:5068${course.imageUrl}`}
+                    alt={course.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <BookOpen size={64} className="text-white opacity-80" />
                   </div>
-                  {lesson.description && <div className="text-gray-600 dark:text-gray-300 mb-2">{lesson.description}</div>}
-                  {lesson.contentType === 0 || lesson.contentType === "Video" ? (
-                    <video src={lesson.contentUrl} controls className="rounded-xl mb-2" style={{ maxWidth: 400 }} />
-                  ) : lesson.contentType === 2 || lesson.contentType === "PDF" ? (
-                    <a href={lesson.contentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mb-2 block">PDF'i Görüntüle</a>
-                  ) : lesson.contentType === 1 || lesson.contentType === "Text" ? (
-                    <a href={lesson.contentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mb-2 block">Metni Görüntüle</a>
-                  ) : null}
-                  {lesson.duration && <div className="text-xs text-gray-400">Süre: {lesson.duration}</div>}
-                  {lesson.quizId && <div className="mt-2"><a href={`/quizzes/${lesson.quizId}`} className="text-xs text-green-600 underline">Quiz'e Git</a></div>}
-                  {/* Bu derse bağlı sınavlar */}
-                  {lessonQuizzes[lesson.id] && lessonQuizzes[lesson.id].length > 0 && (
-                    <div className="mt-3">
-                      <div className="font-semibold text-sm text-purple-700 mb-1">Bu derse bağlı sınavlar:</div>
-                      <ul className="list-disc ml-6">
-                        {lessonQuizzes[lesson.id].map(q => (
-                          <li key={q.id} className="text-sm text-gray-700 dark:text-gray-200">{q.title}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {isAdminOrInstructor && (
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => openEditLesson(lesson)} className="text-xs bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500">Düzenle</button>
-                      <button onClick={() => handleDeleteLesson(lesson)} className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Sil</button>
-                    </div>
-                  )}
-                  {/* Quiz Ekle Butonu ve Quiz Arayüzü */}
-                  {isAdminOrInstructor && !lesson.quizId && (
-                    <button onClick={() => openQuizForm(lesson.id)} className="mt-2 bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 text-xs">Quiz Ekle</button>
-                  )}
-                  {isAdminOrInstructor && lesson.quizId && (
-                    <button onClick={() => openQuestionForm(lesson.quizId)} className="mt-2 bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-xs">Soru Ekle</button>
-                  )}
-                  {/* Quiz Ekle Modalı */}
-                  {showQuizForm && quizLessonId === lesson.id && (
-                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                      <div className="bg-white dark:bg-[#161B22] rounded-2xl shadow-lg p-8 w-full max-w-lg relative">
-                        <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowQuizForm(false)}>×</button>
-                        <h2 className="text-xl font-bold mb-4 text-purple-600 dark:text-purple-400">Quiz Ekle</h2>
-                        <form onSubmit={handleQuizFormSubmit} className="space-y-4">
-                          <div>
-                            <label className="block mb-1">Quiz Başlığı *</label>
-                            <input name="title" value={quizForm.title} onChange={e => setQuizForm(f => ({ ...f, title: e.target.value }))} className="w-full p-2 rounded border" />
-                          </div>
-                          <div>
-                            <label className="block mb-1">Açıklama</label>
-                            <input name="description" value={quizForm.description} onChange={e => setQuizForm(f => ({ ...f, description: e.target.value }))} className="w-full p-2 rounded border" />
-                          </div>
-                          <div>
-                            <label className="block mb-1">Toplam Puan</label>
-                            <input name="totalPoints" type="number" value={quizForm.totalPoints} onChange={e => setQuizForm(f => ({ ...f, totalPoints: e.target.value }))} className="w-full p-2 rounded border" />
-                          </div>
-                          <button type="submit" className="w-full bg-purple-600 text-white font-semibold py-3 rounded-xl shadow hover:bg-purple-700 transition">Quiz Oluştur</button>
-                          {quizFormError && <div className="text-red-500 text-sm mt-2">{quizFormError}</div>}
-                        </form>
+                )}
+                
+                {/* Kurs Türü Badge */}
+                <div className="absolute top-4 left-4">
+                  <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+                    course.courseType === 0 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {course.courseType === 0 ? 'Teorik' : 'Pratik'}
+                  </span>
+                </div>
+
+                {/* Progress Bar (öğrenci için) */}
+                {user?.role === "Student" && (
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <div className="bg-white bg-opacity-90 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">İlerleme</span>
+                        <span className="text-sm text-gray-600">
+                          {Math.round((progress.completedLessons || 0) / contents.length * 100)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${(progress.completedLessons || 0) / contents.length * 100}%` }}
+                        ></div>
                       </div>
                     </div>
-                  )}
-                  {/* Soru Ekle Modalı */}
-                  {showQuestionForm && lesson.quizId === currentQuizId && (
-                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                      <div className="bg-white dark:bg-[#161B22] rounded-2xl shadow-lg p-8 w-full max-w-lg relative">
-                        <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowQuestionForm(false)}>×</button>
-                        <h2 className="text-xl font-bold mb-4 text-blue-600 dark:text-blue-400">Soru Ekle</h2>
-                        <form onSubmit={handleQuestionFormSubmit} className="space-y-4">
-                          <div>
-                            <label className="block mb-1">Soru Metni *</label>
-                            <input name="questionText" value={questionForm.questionText} onChange={e => setQuestionForm(f => ({ ...f, questionText: e.target.value }))} className="w-full p-2 rounded border" />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">{course.title}</h2>
+                
+                <p className="text-gray-600 mb-6 leading-relaxed">
+                  {course.description || "Bu kurs için henüz açıklama eklenmemiş."}
+                </p>
+
+                {/* Kurs İstatistikleri */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-xl mx-auto mb-2">
+                      <BookOpen size={24} className="text-blue-600" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">{contents.length}</p>
+                    <p className="text-xs text-gray-600">Ders</p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-xl mx-auto mb-2">
+                      <Clock size={24} className="text-green-600" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {contents.reduce((total, content) => total + (content.duration || 0), 0)} dk
+                    </p>
+                    <p className="text-xs text-gray-600">Toplam Süre</p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-xl mx-auto mb-2">
+                      <FileText size={24} className="text-purple-600" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">{course.quizzes?.length || 0}</p>
+                    <p className="text-xs text-gray-600">Sınav</p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="flex items-center justify-center w-12 h-12 bg-orange-100 rounded-xl mx-auto mb-2">
+                      <Users size={24} className="text-orange-600" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">-</p>
+                    <p className="text-xs text-gray-600">Öğrenci</p>
+                  </div>
+                </div>
+
+                {/* Etiketler */}
+                {course.tags && (
+                  <div className="flex flex-wrap gap-2">
+                    {course.tags.split(',').map((tag, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full"
+                      >
+                        {tag.trim()}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-8 px-6">
+                  {[
+                    { id: "overview", label: "Genel Bakış", icon: BookOpen },
+                    { id: "contents", label: "Dersler", icon: Video },
+                    { id: "quizzes", label: "Sınavlar", icon: FileText },
+                    { id: "progress", label: "İlerleme", icon: BarChart3 }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        activeTab === tab.id
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <tab.icon size={16} />
+                      <span>{tab.label}</span>
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="p-6">
+                {/* Genel Bakış Tab */}
+                {activeTab === "overview" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">Kurs Hakkında</h3>
+                      <p className="text-gray-600 leading-relaxed">
+                        {course.description || "Bu kurs için detaylı açıklama henüz eklenmemiş."}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Kurs Türü</h4>
+                        <p className="text-gray-600">
+                          {course.courseType === 0 ? 'Teorik Eğitim' : 'Pratik Eğitim'}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Kategori</h4>
+                        <p className="text-gray-600">{course.category || 'Belirtilmemiş'}</p>
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Oluşturulma Tarihi</h4>
+                        <p className="text-gray-600">
+                          {new Date(course.createdAt).toLocaleDateString('tr-TR')}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Toplam İçerik</h4>
+                        <p className="text-gray-600">{contents.length} ders</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dersler Tab */}
+                {activeTab === "contents" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">Dersler</h3>
+                      {isAdminOrInstructor && (
+                        <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                          <Plus size={16} />
+                          <span>Yeni Ders</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {contents.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Video size={64} className="mx-auto text-gray-300 mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Henüz ders eklenmemiş</h3>
+                        <p className="text-gray-600">Bu kurs için henüz içerik eklenmemiş.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {contents.map((content, index) => (
+                          <div
+                            key={content.id}
+                            onClick={() => handleContentClick(content)}
+                            className="group bg-gray-50 hover:bg-gray-100 rounded-xl p-4 cursor-pointer transition-all duration-200 border border-transparent hover:border-gray-200"
+                          >
+                            <div className="flex items-center space-x-4">
+                              <div className="flex-shrink-0">
+                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                  {getContentIcon(content.contentType)}
+                                </div>
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {index + 1}. {content.title}
+                                  </span>
+                                  {progress.completedLessons?.includes(content.id) && (
+                                    <CheckCircle size={16} className="text-green-500" />
+                                  )}
+                                </div>
+                                
+                                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                  <span className="flex items-center space-x-1">
+                                    {getContentIcon(content.contentType)}
+                                    <span>{getContentTypeText(content.contentType)}</span>
+                                  </span>
+                                  {content.duration && (
+                                    <span className="flex items-center space-x-1">
+                                      <Clock size={14} />
+                                      <span>{formatDuration(content.duration)}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex-shrink-0">
+                                <ChevronRight size={20} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block mb-1">Soru Tipi</label>
-                            <select name="questionType" value={questionForm.questionType} onChange={e => setQuestionForm(f => ({ ...f, questionType: e.target.value }))} className="w-full p-2 rounded border">
-                              <option value="MultipleChoice">Çoktan Seçmeli</option>
-                              <option value="TrueFalse">Doğru/Yanlış</option>
-                            </select>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Sınavlar Tab */}
+                {activeTab === "quizzes" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">Sınavlar</h3>
+                      {isAdminOrInstructor && (
+                        <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                          <Plus size={16} />
+                          <span>Yeni Sınav</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {(!course.quizzes || course.quizzes.length === 0) ? (
+                      <div className="text-center py-12">
+                        <FileText size={64} className="mx-auto text-gray-300 mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Henüz sınav eklenmemiş</h3>
+                        <p className="text-gray-600">Bu kurs için henüz sınav eklenmemiş.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {course.quizzes.map((quiz) => (
+                          <div key={quiz.id} className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-medium text-gray-900">{quiz.title}</h4>
+                                <p className="text-sm text-gray-600">{quiz.description}</p>
+                              </div>
+                              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                Sınava Başla
+                              </button>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block mb-1">Şıklar</label>
-                            {questionForm.options.map((opt, i) => (
-                              <div key={i} className="flex items-center gap-2 mb-2">
-                                <input value={opt.text} onChange={e => handleOptionChange(i, 'text', e.target.value)} className="p-2 rounded border flex-1" placeholder={`Şık ${i + 1}`} />
-                                <label className="flex items-center gap-1 text-xs">
-                                  <input type="checkbox" checked={opt.isCorrect} onChange={e => handleOptionChange(i, 'isCorrect', e.target.checked)} /> Doğru
-                                </label>
-                                {questionForm.options.length > 2 && (
-                                  <button type="button" onClick={() => removeOption(i)} className="text-red-500 text-xs">Sil</button>
-                                )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* İlerleme Tab */}
+                {activeTab === "progress" && (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold text-gray-900">İlerleme Raporu</h3>
+                    
+                    {user?.role === "Student" ? (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-blue-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <CheckCircle size={20} className="text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Tamamlanan</p>
+                                <p className="text-xl font-bold text-gray-900">
+                                  {progress.completedLessons || 0}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-green-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <BarChart3 size={20} className="text-green-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Başarı Oranı</p>
+                                <p className="text-xl font-bold text-gray-900">
+                                  {Math.round((progress.completedLessons || 0) / contents.length * 100)}%
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-purple-50 rounded-xl p-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <Award size={20} className="text-purple-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Ortalama Puan</p>
+                                <p className="text-xl font-bold text-gray-900">
+                                  {progress.averageScore || 0}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl p-6 border border-gray-200">
+                          <h4 className="font-medium text-gray-900 mb-4">Ders İlerlemesi</h4>
+                          <div className="space-y-3">
+                            {contents.map((content, index) => (
+                              <div key={content.id} className="flex items-center space-x-3">
+                                <div className="flex-shrink-0">
+                                  {progress.completedLessons?.includes(content.id) ? (
+                                    <CheckCircle size={20} className="text-green-500" />
+                                  ) : (
+                                    <Circle size={20} className="text-gray-300" />
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {index + 1}. {content.title}
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <span className="text-sm text-gray-600">
+                                    {progress.completedLessons?.includes(content.id) ? 'Tamamlandı' : 'Bekliyor'}
+                                  </span>
+                                </div>
                               </div>
                             ))}
-                            <button type="button" onClick={addOption} className="text-green-600 text-xs underline">+ Şık Ekle</button>
                           </div>
-                          <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow hover:bg-blue-700 transition">Soru Ekle</button>
-                          {questionFormError && <div className="text-red-500 text-sm mt-2">{questionFormError}</div>}
-                        </form>
+                        </div>
                       </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <BarChart3 size={64} className="mx-auto text-gray-300 mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">İlerleme raporu</h3>
+                        <p className="text-gray-600">Bu bölüm sadece öğrenciler için görüntülenir.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Hızlı Eylemler */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Hızlı Eylemler</h3>
+              <div className="space-y-3">
+                <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
+                  <Play size={20} />
+                  <span>Kursa Başla</span>
+                </button>
+                
+                <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors">
+                  <Download size={20} />
+                  <span>İndir</span>
+                </button>
+                
+                <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors">
+                  <Share2 size={20} />
+                  <span>Paylaş</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Kurs Bilgileri */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Kurs Bilgileri</h3>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <Calendar size={20} className="text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Oluşturulma</p>
+                    <p className="text-sm text-gray-600">
+                      {new Date(course.createdAt).toLocaleDateString('tr-TR')}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <Clock size={20} className="text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Toplam Süre</p>
+                    <p className="text-sm text-gray-600">
+                      {contents.reduce((total, content) => total + (content.duration || 0), 0)} dakika
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <BookOpen size={20} className="text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Ders Sayısı</p>
+                    <p className="text-sm text-gray-600">{contents.length} ders</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <FileText size={20} className="text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Sınav Sayısı</p>
+                    <p className="text-sm text-gray-600">{course.quizzes?.length || 0} sınav</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* İstatistikler */}
+            {user?.role === "Student" && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">İstatistikler</h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Tamamlanma</span>
+                      <span className="text-sm text-gray-600">
+                        {Math.round((progress.completedLessons || 0) / contents.length * 100)}%
+                      </span>
                     </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(progress.completedLessons || 0) / contents.length * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-900">{progress.completedLessons || 0}</p>
+                      <p className="text-xs text-gray-600">Tamamlanan</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-900">{contents.length - (progress.completedLessons || 0)}</p>
+                      <p className="text-xs text-gray-600">Kalan</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* İçerik Modal */}
+      {showContentModal && selectedContent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">{selectedContent.title}</h2>
+                <button
+                  onClick={() => setShowContentModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <span className="sr-only">Kapat</span>
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {selectedContent.description && (
+                <p className="text-gray-600 mb-6">{selectedContent.description}</p>
+              )}
+
+              {selectedContent.contentType === 0 && selectedContent.contentUrl && (
+                <div className="aspect-video bg-gray-100 rounded-xl overflow-hidden mb-6">
+                  <video
+                    controls
+                    className="w-full h-full"
+                    src={`http://192.168.1.78:5068${selectedContent.contentUrl}`}
+                  >
+                    Tarayıcınız video oynatmayı desteklemiyor.
+                  </video>
+                </div>
+              )}
+
+              {selectedContent.contentType === 1 && (
+                <div className="prose max-w-none">
+                  <div className="bg-gray-50 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Metin İçeriği</h3>
+                    <div className="text-gray-700 leading-relaxed">
+                      {selectedContent.contentUrl || "Bu ders için metin içeriği henüz eklenmemiş."}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedContent.contentType === 2 && selectedContent.contentUrl && (
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">PDF İçeriği</h3>
+                  <div className="aspect-[3/4] bg-white rounded-lg shadow-sm overflow-hidden">
+                    <iframe
+                      src={`http://192.168.1.78:5068${selectedContent.contentUrl}`}
+                      className="w-full h-full"
+                      title={selectedContent.title}
+                    />
+                  </div>
+                  <div className="mt-4">
+                    <a
+                      href={`http://192.168.1.78:5068${selectedContent.contentUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Download size={16} />
+                      <span>PDF'i İndir</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  <span className="flex items-center space-x-1">
+                    {getContentIcon(selectedContent.contentType)}
+                    <span>{getContentTypeText(selectedContent.contentType)}</span>
+                  </span>
+                  {selectedContent.duration && (
+                    <span className="flex items-center space-x-1">
+                      <Clock size={14} />
+                      <span>{formatDuration(selectedContent.duration)}</span>
+                    </span>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-          {/* Ders Ekle/Düzenle Modalı */}
-          {showLessonForm && (
-            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-[#161B22] rounded-2xl shadow-lg p-8 w-full max-w-lg relative">
-                <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowLessonForm(false)}>×</button>
-                <h2 className="text-xl font-bold mb-4 text-blue-600 dark:text-blue-400">{editingLesson ? "Dersi Düzenle" : "Ders Ekle"}</h2>
-                <form onSubmit={handleLessonFormSubmit} className="space-y-4">
-                  <div>
-                    <label className="block mb-1">Başlık *</label>
-                    <input name="title" value={lessonForm.title} onChange={e => setLessonForm(f => ({ ...f, title: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <div>
-                    <label className="block mb-1">Açıklama</label>
-                    <input name="description" value={lessonForm.description} onChange={e => setLessonForm(f => ({ ...f, description: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <div>
-                    <label className="block mb-1">İçerik Türü *</label>
-                    <select name="contentType" value={lessonForm.contentType} onChange={e => setLessonForm(f => ({ ...f, contentType: e.target.value }))} className="w-full p-2 rounded border">
-                      <option value="Video">Video</option>
-                      <option value="Text">Metin</option>
-                      <option value="PDF">PDF</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block mb-1">İçerik Bağlantısı (URL) *</label>
-                    <input name="contentUrl" value={lessonForm.contentUrl} onChange={e => setLessonForm(f => ({ ...f, contentUrl: e.target.value }))} className="w-full p-2 rounded border mb-2" />
-                    <input type="file"
-                      accept={lessonForm.contentType === "Video" ? "video/*" : lessonForm.contentType === "PDF" ? "application/pdf" : "image/*"}
-                      onChange={handleFileUpload}
-                      className="w-full p-2 rounded border"
-                      disabled={uploading}
-                    />
-                    {uploading && <div className="text-xs text-blue-600 mt-1">Yükleniyor...</div>}
-                    {uploadError && <div className="text-xs text-red-500 mt-1">{uploadError}</div>}
-                  </div>
-                  <div>
-                    <label className="block mb-1">Sıra</label>
-                    <input name="order" type="number" value={lessonForm.order} onChange={e => setLessonForm(f => ({ ...f, order: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <div>
-                    <label className="block mb-1">Süre (örn. 00:10:00)</label>
-                    <input name="duration" value={lessonForm.duration} onChange={e => setLessonForm(f => ({ ...f, duration: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <div>
-                    <label className="block mb-1">Sınav Seç</label>
-                    <select
-                      name="quizId"
-                      value={lessonForm.quizId || ''}
-                      onChange={e => setLessonForm(f => ({ ...f, quizId: e.target.value }))}
-                      className="w-full p-2 rounded border"
-                    >
-                      <option value="">Sınav seçiniz (isteğe bağlı)</option>
-                      {quizzes.map(q => (
-                        <option key={q.id} value={q.id}>{q.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow hover:bg-blue-700 transition">Kaydet</button>
-                  {lessonFormError && <div className="text-red-500 text-sm mt-2">{lessonFormError}</div>}
-                </form>
+                
+                <div className="flex space-x-3">
+                  <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                    Önceki
+                  </button>
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Sonraki
+                  </button>
+                </div>
               </div>
             </div>
-          )}
-          {/* Yeni Sınav Ekle Modalı */}
-          {showQuizAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-[#161B22] rounded-2xl shadow-lg p-8 w-full max-w-lg relative">
-                <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowQuizAddModal(false)}>×</button>
-                <h2 className="text-xl font-bold mb-4 text-purple-600 dark:text-purple-400">Yeni Sınav Ekle</h2>
-                <form onSubmit={async e => {
-                  e.preventDefault();
-                  setNewQuizError('');
-                  if (!newQuizForm.title) { setNewQuizError('Başlık zorunlu'); return; }
-                  try {
-                    const res = await fetch('http://192.168.1.78:5068/api/quizzes', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        title: newQuizForm.title,
-                        description: newQuizForm.description,
-                        totalPoints: Number(newQuizForm.totalPoints),
-                        courseId: id
-                      })
-                    });
-                    if (res.ok) {
-                      setShowQuizAddModal(false);
-                      setNewQuizForm({ title: '', description: '', totalPoints: 0 });
-                      // Sınav listesini güncelle
-                      fetch("http://192.168.1.78:5068/api/quizzes").then(res => res.json()).then(data => setQuizzes(data));
-                    } else {
-                      setNewQuizError('Sınav eklenemedi!');
-                    }
-                  } catch {
-                    setNewQuizError('Sunucu hatası!');
-                  }
-                }} className="space-y-4">
-                  <div>
-                    <label className="block mb-1">Başlık *</label>
-                    <input name="title" value={newQuizForm.title} onChange={e => setNewQuizForm(f => ({ ...f, title: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <div>
-                    <label className="block mb-1">Açıklama</label>
-                    <input name="description" value={newQuizForm.description} onChange={e => setNewQuizForm(f => ({ ...f, description: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <div>
-                    <label className="block mb-1">Toplam Puan</label>
-                    <input name="totalPoints" type="number" value={newQuizForm.totalPoints} onChange={e => setNewQuizForm(f => ({ ...f, totalPoints: e.target.value }))} className="w-full p-2 rounded border" />
-                  </div>
-                  <button type="submit" className="w-full bg-purple-600 text-white font-semibold py-3 rounded-xl shadow hover:bg-purple-700 transition">Kaydet</button>
-                  {newQuizError && <div className="text-red-500 text-sm mt-2">{newQuizError}</div>}
-                </form>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>

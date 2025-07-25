@@ -45,9 +45,10 @@ export default function QuizzesPage() {
         const res = await fetch("http://192.168.1.78:5068/api/courses");
         if (!res.ok) throw new Error();
         const courses = await res.json();
-        // Tüm kursların derslerini birleştir
-        const allLessons = courses.flatMap(c => (c.courseContents || []).map(l => ({ ...l, courseTitle: c.title })));
+        // Tüm kursların derslerini birleştir, her derse courseTitle ve courseId ekle
+        const allLessons = courses.flatMap(c => (c.courseContents || []).map(l => ({ ...l, courseTitle: c.title, courseId: c.id })));
         setLessons(allLessons);
+        console.log("Lessons state:", allLessons);
       } catch {
         setLessons([]);
       }
@@ -60,16 +61,35 @@ export default function QuizzesPage() {
     setQuizFormError('');
     if (!quizForm.title) { setQuizFormError('Başlık zorunlu'); return; }
     try {
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const drivingSchoolId = user.DrivingSchoolId || user.drivingSchoolId;
+      // Seçili dersin bağlı olduğu kursun ID'sini bul
+      let courseId = undefined;
+      if (quizForm.courseContentId) {
+        const lesson = lessons.find(l => l.id === quizForm.courseContentId);
+        courseId = lesson && lesson.courseId ? lesson.courseId : undefined;
+      }
+      if (!courseId) {
+        setQuizFormError("Lütfen önce bir kurs ve ders seçin.");
+        return;
+      }
+      const bodyObj = {
+        title: quizForm.title,
+        description: quizForm.description,
+        totalPoints: Number(quizForm.totalPoints),
+        courseContentId: quizForm.courseContentId || null,
+        drivingSchool: drivingSchoolId ? { id: drivingSchoolId } : undefined,
+        course: courseId ? { id: courseId } : undefined
+      };
+      Object.keys(bodyObj).forEach(key => bodyObj[key] === undefined && delete bodyObj[key]);
       const res = await fetch('http://192.168.1.78:5068/api/quizzes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: quizForm.title,
-          description: quizForm.description,
-          totalPoints: Number(quizForm.totalPoints),
-          courseContentId: quizForm.courseContentId || null
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(bodyObj)
       });
+      let data = {};
+      try { data = await res.json(); } catch {}
       if (res.ok) {
         setShowQuizModal(false);
         setQuizForm({ title: '', description: '', totalPoints: 0, courseContentId: '' });
@@ -77,7 +97,7 @@ export default function QuizzesPage() {
         const data = await fetch("http://192.168.1.78:5068/api/quizzes").then(r => r.json());
         setQuizzes(data);
       } else {
-        setQuizFormError('Sınav eklenemedi!');
+        setQuizFormError(data?.message || JSON.stringify(data) || "Sınav eklenemedi!");
       }
     } catch {
       setQuizFormError('Sunucu hatası!');
@@ -107,9 +127,10 @@ export default function QuizzesPage() {
     setQuizFormError('');
     if (!quizForm.title) { setQuizFormError('Başlık zorunlu'); return; }
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`http://192.168.1.78:5068/api/quizzes/${editingQuiz.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           title: quizForm.title,
           description: quizForm.description,
@@ -234,12 +255,32 @@ export default function QuizzesPage() {
     alert('Soru silme backend endpointi eklenmeli!');
   }
 
-  // Soru ekle formu her zaman açık, ekledikçe alta yeni form açılır
+  // Soru ekleme formu her zaman açık, ekledikçe alta yeni form açılır
   async function handleAddPendingQuestion(i, e) {
     e.preventDefault();
     const q = pendingQuestions[i];
-    if (!q.questionText || q.options.length < 2 || !q.options.some(o => o.isCorrect)) {
-      alert('Soru ve şıklar eksik!');
+    if (!q.questionText) {
+      setPendingQuestions(pendingQuestions => {
+        const arr = [...pendingQuestions];
+        arr[i].formError = 'Soru metni zorunludur.';
+        return arr;
+      });
+      return;
+    }
+    if (q.options.length < 4) {
+      setPendingQuestions(pendingQuestions => {
+        const arr = [...pendingQuestions];
+        arr[i].formError = 'Her soru için en az 4 şık olmalıdır.';
+        return arr;
+      });
+      return;
+    }
+    if (!q.options.some(o => o.isCorrect)) {
+      setPendingQuestions(pendingQuestions => {
+        const arr = [...pendingQuestions];
+        arr[i].formError = 'En az 1 doğru şık seçilmeli.';
+        return arr;
+      });
       return;
     }
     // Medya yükleme (soru ve şıklar için, örnek: sadece ilk şık için)
@@ -424,25 +465,41 @@ export default function QuizzesPage() {
                 </div>
                 <div>
                   <label className="block mb-1">Soruya Resim/Video Ekle</label>
-                  <input type="file" accept="image/*,video/*" onChange={e => setPendingQuestions(arr => { const a = [...arr]; a[qi].mediaFile = e.target.files[0]; return a; })} className="w-full p-2 rounded border" />
+                  <input type="file" accept="image/*,video/*" onChange={e => setPendingQuestions(arr => { const a = [...arr]; a[qi].mediaFile = e.target.files[0]; a[qi].mediaPreview = e.target.files[0] ? URL.createObjectURL(e.target.files[0]) : null; return a; })} className="w-full p-2 rounded border" />
+                  {q.mediaPreview && (
+                    <div className="mt-2">
+                      {q.mediaFile && q.mediaFile.type.startsWith('image') ? (
+                        <img src={q.mediaPreview} alt="Önizleme" className="max-h-32 rounded" />
+                      ) : q.mediaFile && q.mediaFile.type.startsWith('video') ? (
+                        <video src={q.mediaPreview} controls className="max-h-32 rounded" />
+                      ) : null}
+                    </div>
+                  )}
                   {uploading && <div className="text-xs text-blue-600 mt-1">Yükleniyor...</div>}
                 </div>
                 <div>
-                  <label className="block mb-1">Şıklar</label>
-                  {q.options.map((opt, oi) => (
+                  <label className="block mb-1">Şıklar (4 adet zorunlu)</label>
+                  {[0,1,2,3].map((oi) => (
                     <div key={oi} className="flex items-center gap-2 mb-2">
-                      <input value={opt.text} onChange={e => handlePendingOptionChange(qi, oi, 'text', e.target.value)} className="p-2 rounded border flex-1" placeholder={`Şık ${oi + 1}`} />
+                      <input value={q.options[oi]?.text || ''} onChange={e => handlePendingOptionChange(qi, oi, 'text', e.target.value)} className="p-2 rounded border flex-1" placeholder={`Şık ${oi + 1}`} />
                       <input type="file" accept="image/*,video/*" onChange={e => handlePendingOptionFileChange(qi, oi, e.target.files[0])} className="w-32 p-1 rounded border" />
-                      <label className="flex items-center gap-1 text-xs">
-                        <input type="checkbox" checked={opt.isCorrect} onChange={e => handlePendingOptionChange(qi, oi, 'isCorrect', e.target.checked)} /> Doğru
-                      </label>
-                      {q.options.length > 2 && (
-                        <button type="button" onClick={() => removePendingOption(qi, oi)} className="text-red-500 text-xs">Sil</button>
+                      {q.options[oi]?.mediaFile && (
+                        <span className="ml-2">
+                          {q.options[oi].mediaFile.type.startsWith('image') ? (
+                            <img src={URL.createObjectURL(q.options[oi].mediaFile)} alt="Şık Önizleme" className="max-h-12 rounded" />
+                          ) : q.options[oi].mediaFile.type.startsWith('video') ? (
+                            <video src={URL.createObjectURL(q.options[oi].mediaFile)} controls className="max-h-12 rounded" />
+                          ) : null}
+                        </span>
                       )}
+                      <label className="flex items-center gap-1 text-xs">
+                        <input type="checkbox" checked={q.options[oi]?.isCorrect || false} onChange={e => handlePendingOptionChange(qi, oi, 'isCorrect', e.target.checked)} /> Doğru
+                      </label>
                     </div>
                   ))}
-                  <button type="button" onClick={() => addPendingOption(qi)} className="text-green-600 text-xs underline">+ Şık Ekle</button>
+                  <div className="text-xs text-gray-500">Her soru için 4 şık zorunludur. Şık ekleme/çıkarma yapılamaz.</div>
                 </div>
+                {q.formError && <div className="text-red-500 text-sm mt-2">{q.formError}</div>}
                 <button type="submit" className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow hover:bg-blue-700 transition">Soruyu Ekle</button>
               </form>
             ))}

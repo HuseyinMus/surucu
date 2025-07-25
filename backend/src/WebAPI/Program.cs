@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using MediatR;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +48,7 @@ builder.Services.AddScoped<Application.Interfaces.IStudentProgressService, Infra
 builder.Services.AddScoped<Application.Interfaces.IScheduleService, Infrastructure.Services.ScheduleService>();
 builder.Services.AddScoped<Application.Interfaces.INotificationService, Infrastructure.Services.NotificationService>();
 builder.Services.AddScoped<Application.Interfaces.IDocumentService, Infrastructure.Services.DocumentService>();
+builder.Services.AddScoped<Application.Interfaces.IProgressTrackingService, Infrastructure.Services.ProgressTrackingService>();
 builder.Services.AddSingleton<Application.Interfaces.ISmsSender, Infrastructure.Services.SmsSender>();
 builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.IPasswordHasher<Domain.Entities.User>, Microsoft.AspNetCore.Identity.PasswordHasher<Domain.Entities.User>>();
 
@@ -75,6 +77,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+// Statik dosya sunumu (uploads klasörü için)
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "uploads")),
+    RequestPath = "/uploads"
+});
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

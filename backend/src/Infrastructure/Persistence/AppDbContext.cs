@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<StudentProgress> StudentProgresses => Set<StudentProgress>();
+    public DbSet<StudentAnalytics> StudentAnalytics => Set<StudentAnalytics>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

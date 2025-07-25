@@ -1,5 +1,7 @@
 namespace Domain.Entities;
 
+using System.Text.Json.Serialization;
+
 public enum ContentType
 {
     Video,
@@ -14,6 +16,7 @@ public class CourseContent
     public string Title { get; set; } = null!;
     public string? Description { get; set; } // Açıklama
     public ContentType ContentType { get; set; }
+    [JsonPropertyName("contentUrl")]
     public string ContentUrl { get; set; } = null!;
     public int Order { get; set; }
     public TimeSpan? Duration { get; set; }
