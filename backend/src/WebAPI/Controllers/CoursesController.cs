@@ -84,14 +84,32 @@ public class CoursesController : ControllerBase
     {
         Guid drivingSchoolId;
         var claim = User.FindFirst("DrivingSchoolId")?.Value;
+        
+        // DEBUG LOG'LARI
+        Console.WriteLine($"DEBUG: DrivingSchoolId claim değeri: {claim}");
+        Console.WriteLine($"DEBUG: User claims: {string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}"))}");
+        
         if (claim != null && Guid.TryParse(claim, out var parsedId))
             drivingSchoolId = parsedId;
         else
             drivingSchoolId = Guid.Empty;
+            
+        Console.WriteLine($"DEBUG: Kullanılacak DrivingSchoolId: {drivingSchoolId}");
+        
+        // Önce tüm kursları görelim
+        var allCourses = await _db.Courses.ToListAsync();
+        Console.WriteLine($"DEBUG: Veritabanında toplam {allCourses.Count} kurs var");
+        foreach (var course in allCourses.Take(5)) // İlk 5 kursu göster
+        {
+            Console.WriteLine($"DEBUG: Kurs - ID: {course.Id}, Title: {course.Title}, DrivingSchoolId: {course.DrivingSchoolId}");
+        }
+        
+        // GEÇİCİ: Tüm kursları döndür (filtre kaldırıldı)
         var courses = await _db.Courses
             .Include(c => c.CourseContents)
-            .Where(c => c.DrivingSchoolId == drivingSchoolId)
             .ToListAsync();
+            
+        Console.WriteLine($"DEBUG: Filtrelenmiş {courses.Count} kurs bulundu");
 
         // Sadece temel alanları ve courseContents'in temel alanlarını döndür
         var result = courses.Select(c => new {

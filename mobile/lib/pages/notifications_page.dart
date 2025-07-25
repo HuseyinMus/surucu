@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -8,11 +9,13 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> with TickerProviderStateMixin {
-  String selectedCategory = 'Tümü';
-  final List<String> categories = ['Tümü', 'Duyuru', 'Sistem', 'Kurs', 'Sınav'];
-  
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+
+  // Backend verilerini tutacak değişkenler
+  List<Map<String, dynamic>> notifications = [];
+  bool isLoading = true;
+  String? errorMessage;
 
   @override
   void initState() {
@@ -25,6 +28,8 @@ class _NotificationsPageState extends State<NotificationsPage> with TickerProvid
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
     _fadeController.forward();
+    
+    loadNotifications();
   }
 
   @override
@@ -33,93 +38,114 @@ class _NotificationsPageState extends State<NotificationsPage> with TickerProvid
     super.dispose();
   }
 
-  // Bildirim verileri
-  List<Map<String, dynamic>> notifications = [
-    {
-      'id': 1,
-      'title': 'Yeni Kurs Eklendi',
-      'message': 'Güvenli Sürüş kursu artık mevcut. Hemen başla!',
-      'type': 'Kurs',
-      'time': '2 saat önce',
-      'isRead': false,
-      'icon': Icons.book_outlined,
-      'color': Colors.blue,
-    },
-    {
-      'id': 2,
-      'title': 'Sınav Sonucun Hazır',
-      'message': 'Trafik İşaretleri sınavından 92 puan aldın. Tebrikler!',
-      'type': 'Sınav',
-      'time': '5 saat önce',
-      'isRead': false,
-      'icon': Icons.quiz_outlined,
-      'color': Colors.green,
-    },
-    {
-      'id': 3,
-      'title': 'Günlük Hedefin Tamamlandı',
-      'message': 'Bugün 2 saat çalışma hedefini başarıyla tamamladın.',
-      'type': 'Sistem',
-      'time': '1 gün önce',
-      'isRead': true,
-      'icon': Icons.check_circle_outlined,
-      'color': Colors.orange,
-    },
-    {
-      'id': 4,
-      'title': 'Önemli Duyuru',
-      'message': 'Sistem bakımı nedeniyle yarın 14:00-16:00 arası hizmet verilmeyecek.',
-      'type': 'Duyuru',
-      'time': '1 gün önce',
-      'isRead': true,
-      'icon': Icons.campaign_outlined,
-      'color': Colors.red,
-    },
-    {
-      'id': 5,
-      'title': 'Kurs Hatırlatması',
-      'message': 'Direksiyon Teknikleri kursunda 3 ders kaldı.',
-      'type': 'Kurs',
-      'time': '2 gün önce',
-      'isRead': true,
-      'icon': Icons.schedule_outlined,
-      'color': Colors.purple,
-    },
-    {
-      'id': 6,
-      'title': 'Başarı Rozeti Kazandın',
-      'message': '"Azimli Öğrenci" rozetini kazandın. 7 gün üst üste çalıştın!',
-      'type': 'Sistem',
-      'time': '3 gün önce',
-      'isRead': true,
-      'icon': Icons.military_tech_outlined,
-      'color': Colors.amber,
-    },
-    {
-      'id': 7,
-      'title': 'Yeni Sınav Açıldı',
-      'message': 'Park Teknikleri sınavı artık mevcut.',
-      'type': 'Sınav',
-      'time': '4 gün önce',
-      'isRead': true,
-      'icon': Icons.assignment_outlined,
-      'color': Colors.indigo,
-    },
-    {
-      'id': 8,
-      'title': 'Haftalık Rapor',
-      'message': 'Bu hafta 42 saat çalıştın ve 3 sınav tamamladın.',
-      'type': 'Sistem',
-      'time': '1 hafta önce',
-      'isRead': true,
-      'icon': Icons.bar_chart_outlined,
-      'color': Colors.cyan,
-    },
-  ];
+  Future<void> loadNotifications() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
 
-  List<Map<String, dynamic>> get filteredNotifications {
-    if (selectedCategory == 'Tümü') return notifications;
-    return notifications.where((notif) => notif['type'] == selectedCategory).toList();
+      final notificationsData = await ApiService.getNotifications();
+      
+      if (notificationsData != null) {
+        setState(() {
+          notifications = notificationsData.map((notification) => {
+            'id': notification['id'],
+            'title': notification['title'] ?? 'Bildirim',
+            'message': notification['message'] ?? notification['content'] ?? '',
+            'type': _mapNotificationType(notification['type']),
+            'time': _formatTime(notification['createdAt']),
+            'isRead': notification['isRead'] ?? false,
+            'icon': _getNotificationIcon(notification['type']),
+            'color': _getNotificationColor(notification['type']),
+          }).toList();
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Bildirimler yüklenemedi');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Bildirimler yüklenirken hata oluştu: ${e.toString()}';
+      });
+      print('Bildirimler yükleme hatası: $e');
+    }
+  }
+
+  String _mapNotificationType(dynamic type) {
+    if (type == null) return 'Genel';
+    
+    final typeStr = type.toString().toLowerCase();
+    switch (typeStr) {
+      case 'course':
+      case 'kurs':
+        return 'Kurs';
+      case 'quiz':
+      case 'exam':
+      case 'sinav':
+        return 'Sınav';
+      case 'announcement':
+      case 'duyuru':
+        return 'Duyuru';
+      case 'system':
+      case 'sistem':
+        return 'Sistem';
+      default:
+        return 'Genel';
+    }
+  }
+
+  String _formatTime(dynamic createdAt) {
+    if (createdAt == null) return 'Bilinmiyor';
+    
+    try {
+      DateTime date = DateTime.parse(createdAt.toString());
+      DateTime now = DateTime.now();
+      Duration difference = now.difference(date);
+      
+      if (difference.inMinutes < 60) {
+        return '${difference.inMinutes} dakika önce';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours} saat önce';
+      } else {
+        return '${difference.inDays} gün önce';
+      }
+    } catch (e) {
+      return 'Bilinmiyor';
+    }
+  }
+
+  IconData _getNotificationIcon(dynamic type) {
+    final typeStr = _mapNotificationType(type);
+    switch (typeStr) {
+      case 'Kurs':
+        return Icons.book_outlined;
+      case 'Sınav':
+        return Icons.quiz_outlined;
+      case 'Duyuru':
+        return Icons.campaign_outlined;
+      case 'Sistem':
+        return Icons.settings_outlined;
+      default:
+        return Icons.notifications_outlined;
+    }
+  }
+
+  MaterialColor _getNotificationColor(dynamic type) {
+    final typeStr = _mapNotificationType(type);
+    switch (typeStr) {
+      case 'Kurs':
+        return Colors.blue;
+      case 'Sınav':
+        return Colors.green;
+      case 'Duyuru':
+        return Colors.red;
+      case 'Sistem':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
   }
 
   int get unreadCount {
@@ -128,88 +154,103 @@ class _NotificationsPageState extends State<NotificationsPage> with TickerProvid
 
   void markAsRead(int id) {
     setState(() {
-      notifications = notifications.map((notif) {
-        if (notif['id'] == id) {
-          notif['isRead'] = true;
-        }
-        return notif;
-      }).toList();
+      final index = notifications.indexWhere((notif) => notif['id'] == id);
+      if (index != -1) {
+        notifications[index]['isRead'] = true;
+      }
     });
-  }
-
-  void markAllAsRead() {
-    setState(() {
-      notifications = notifications.map((notif) {
-        notif['isRead'] = true;
-        return notif;
-      }).toList();
-    });
-  }
-
-  void deleteNotification(int id) {
-    setState(() {
-      notifications.removeWhere((notif) => notif['id'] == id);
-    });
+    
+    // Backend'e bildir
+    ApiService.markNotificationAsRead(id);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.orange[50]!,
-              Colors.white,
-              Colors.amber[50]!,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              children: [
-                // Modern AppBar
-                _buildModernAppBar(),
-                
-                // Category Filter
-                _buildCategoryFilter(),
-                
-                // Notifications List
-                Expanded(
-                  child: filteredNotifications.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          onRefresh: () async {
-                            await Future.delayed(const Duration(seconds: 1));
-                            setState(() {});
-                          },
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: filteredNotifications.length,
-                            itemBuilder: (context, index) {
-                              return _buildNotificationCard(filteredNotifications[index], index);
-                            },
+      backgroundColor: Colors.grey[50],
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: isLoading 
+              ? _buildLoadingState()
+              : errorMessage != null
+                  ? _buildErrorState()
+                  : Column(
+                      children: [
+                        // AppBar
+                        _buildAppBar(),
+                        
+                        // Content
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: loadNotifications,
+                            child: _buildNotificationsContent(),
                           ),
                         ),
-                ),
-              ],
-            ),
-          ),
+                      ],
+                    ),
         ),
       ),
     );
   }
 
-  Widget _buildModernAppBar() {
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Bildirimler yükleniyor...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Bildirimler yüklenemedi',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            errorMessage!,
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: loadNotifications,
+            child: const Text('Tekrar Dene'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.orange[600]!, Colors.amber[600]!],
+          colors: [Colors.indigo[600]!, Colors.cyan[600]!],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
@@ -237,7 +278,11 @@ class _NotificationsPageState extends State<NotificationsPage> with TickerProvid
                   ),
                 ),
                 Text(
-                  '${notifications.length} bildirim, $unreadCount okunmamış',
+                  isLoading 
+                      ? 'Yükleniyor...' 
+                      : unreadCount > 0 
+                          ? '$unreadCount okunmamış bildirim'
+                          : 'Tüm bildirimler okundu',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
                     fontSize: 14,
@@ -248,17 +293,27 @@ class _NotificationsPageState extends State<NotificationsPage> with TickerProvid
           ),
           if (unreadCount > 0)
             GestureDetector(
-              onTap: markAllAsRead,
+              onTap: () {
+                // Tümünü okundu olarak işaretle
+                for (var notification in notifications) {
+                  if (!notification['isRead']) {
+                    markAsRead(notification['id']);
+                  }
+                }
+              },
               child: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.done_all,
-                  color: Colors.white,
-                  size: 24,
+                child: const Text(
+                  'Tümünü Okundu İşaretle',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
@@ -267,270 +322,163 @@ class _NotificationsPageState extends State<NotificationsPage> with TickerProvid
     );
   }
 
-  Widget _buildCategoryFilter() {
-    return Container(
-      height: 50,
-      margin: const EdgeInsets.all(16),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          final isSelected = selectedCategory == category;
-          final categoryCount = category == 'Tümü' 
-              ? notifications.length 
-              : notifications.where((n) => n['type'] == category).length;
-          
-          return Container(
-            margin: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  selectedCategory = category;
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: isSelected
-                      ? LinearGradient(colors: [Colors.orange[600]!, Colors.amber[600]!])
-                      : null,
-                  color: isSelected ? null : Colors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      spreadRadius: 1,
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      category,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.grey[700],
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (categoryCount > 0) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.white.withOpacity(0.3) : Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          categoryCount.toString(),
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey[600],
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+  Widget _buildNotificationsContent() {
+    if (notifications.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.notifications_off_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Henüz bildirim yok',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
               ),
             ),
-          );
-        },
-      ),
+            const SizedBox(height: 8),
+            Text(
+              'Yeni bildirimler burada görünecek',
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: notifications.length,
+      itemBuilder: (context, index) {
+        return _buildNotificationCard(notifications[index]);
+      },
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> notification, int index) {
-    final isUnread = !notification['isRead'];
+  Widget _buildNotificationCard(Map<String, dynamic> notification) {
+    final isRead = notification['isRead'];
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Dismissible(
-        key: Key('notification_${notification['id']}'),
-        direction: DismissDirection.endToStart,
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 20),
-          decoration: BoxDecoration(
-            color: Colors.red[400],
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: const Icon(
-            Icons.delete_outline,
-            color: Colors.white,
-            size: 28,
-          ),
-        ),
-        onDismissed: (direction) {
-          deleteNotification(notification['id']);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${notification['title']} silindi'),
-              backgroundColor: Colors.red[400],
-            ),
-          );
+      child: GestureDetector(
+        onTap: () {
+          if (!isRead) {
+            markAsRead(notification['id']);
+          }
         },
-        child: GestureDetector(
-          onTap: () {
-            if (isUnread) {
-              markAsRead(notification['id']);
-            }
-          },
-          child: AnimatedContainer(
-            duration: Duration(milliseconds: 300 + (index * 50)),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              border: isUnread ? Border.all(color: Colors.orange[200]!, width: 2) : null,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(isUnread ? 0.15 : 0.08),
-                  spreadRadius: isUnread ? 3 : 1,
-                  blurRadius: isUnread ? 12 : 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isRead ? Colors.white : notification['color'][50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isRead ? Colors.grey[200]! : notification['color'][200],
+              width: isRead ? 1 : 2,
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Icon
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: notification['color'][100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      notification['icon'],
-                      color: notification['color'][600],
-                      size: 24,
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 16),
-                  
-                  // Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                spreadRadius: 1,
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: notification['color'][600],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  notification['icon'],
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                notification['title'],
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
-                                  color: Colors.grey[800],
-                                ),
-                              ),
+                        Expanded(
+                          child: Text(
+                            notification['title'],
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
+                              color: Colors.grey[800],
                             ),
-                            if (isUnread)
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.orange[600],
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 4),
-                        
-                        Text(
-                          notification['message'],
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            height: 1.3,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        
-                        const SizedBox(height: 8),
-                        
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: notification['color'][50],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                notification['type'],
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: notification['color'][700],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
+                        if (!isRead)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: notification['color'][600],
+                              shape: BoxShape.circle,
                             ),
-                            Text(
-                              notification['time'],
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                              ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      notification['message'],
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: notification['color'][100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            notification['type'],
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: notification['color'][700],
+                              fontWeight: FontWeight.w500,
                             ),
-                          ],
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          notification['time'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.notifications_none_outlined,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Bildirim Yok',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            selectedCategory == 'Tümü' 
-                ? 'Henüz hiç bildiriminiz yok'
-                : '$selectedCategory kategorisinde bildirim yok',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'video_player_page.dart';
+import '../services/api_service.dart';
 
 class CourseDetailPage extends StatefulWidget {
   final Map<String, dynamic> course;
@@ -17,6 +18,12 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
   String selectedTab = 'İçerik';
   final List<String> tabs = ['İçerik', 'Hakkında', 'Yorumlar'];
 
+  // Backend verilerini tutacak değişkenler
+  Map<String, dynamic>? courseDetail;
+  List<Map<String, dynamic>> lessons = [];
+  bool isLoading = true;
+  String? errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +35,97 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
     _fadeController.forward();
+    
+    loadCourseDetail();
+  }
+
+  Future<void> loadCourseDetail() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      final courseId = widget.course['id'];
+      if (courseId != null) {
+        final detail = await ApiService.getCourseDetail(courseId);
+        
+        if (detail != null) {
+          setState(() {
+            courseDetail = detail;
+            lessons = _mapCourseContents(detail['courseContents'] ?? []);
+            isLoading = false;
+          });
+        } else {
+          throw Exception('Kurs detayları yüklenemedi');
+        }
+      } else {
+        throw Exception('Kurs ID bulunamadı');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Kurs detayları yüklenirken hata oluştu: ${e.toString()}';
+      });
+      print('Kurs detay hatası: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _mapCourseContents(List<dynamic> contents) {
+    return contents.asMap().entries.map((entry) {
+      int index = entry.key;
+      var content = entry.value;
+      
+      return {
+        'id': content['id'],
+        'title': content['title'] ?? 'Başlıksız İçerik',
+        'description': content['description'] ?? '',
+        'duration': _formatDuration(content['duration']),
+        'isCompleted': false, // TODO: Progress API'den gelecek
+        'isLocked': index > 2, // İlk 3 ders açık, diğerleri kilitli
+        'type': _mapContentType(content['contentType']),
+        'contentUrl': content['contentUrl'],
+        'order': content['order'] ?? index,
+      };
+    }).toList()..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
+  }
+
+  String _formatDuration(dynamic duration) {
+    if (duration == null) return '5:00';
+    
+    if (duration is String) {
+      // Backend'den string olarak gelirse parse et
+      final parts = duration.split(':');
+      if (parts.length >= 2) {
+        final minutes = int.tryParse(parts[1]) ?? 0;
+        return '$minutes:00';
+      }
+    } else if (duration is int) {
+      // Saniye cinsinden gelirse dakikaya çevir
+      final minutes = (duration / 60).round();
+      return '$minutes:00';
+    }
+    
+    return '5:00'; // Varsayılan
+  }
+
+  String _mapContentType(dynamic contentType) {
+    if (contentType == null) return 'video';
+    
+    final typeStr = contentType.toString().toLowerCase();
+    switch (typeStr) {
+      case '0':
+      case 'video':
+        return 'video';
+      case '1':
+      case 'text':
+        return 'text';
+      case '2':
+      case 'quiz':
+        return 'quiz';
+      default:
+        return 'video';
+    }
   }
 
   @override
@@ -36,72 +134,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
     super.dispose();
   }
 
-  // Kurs içeriği - dersler/videolar
-  final List<Map<String, dynamic>> lessons = [
-    {
-      'title': 'Giriş ve Temel Kavramlar',
-      'duration': '12:30',
-      'isCompleted': true,
-      'isLocked': false,
-      'type': 'video',
-    },
-    {
-      'title': 'Trafik İşaretlerinin Sınıflandırılması',
-      'duration': '18:45',
-      'isCompleted': true,
-      'isLocked': false,
-      'type': 'video',
-    },
-    {
-      'title': 'Uyarı İşaretleri',
-      'duration': '15:20',
-      'isCompleted': true,
-      'isLocked': false,
-      'type': 'video',
-    },
-    {
-      'title': 'Yasak İşaretleri',
-      'duration': '20:15',
-      'isCompleted': false,
-      'isLocked': false,
-      'type': 'video',
-    },
-    {
-      'title': 'Bilgi İşaretleri',
-      'duration': '16:40',
-      'isCompleted': false,
-      'isLocked': false,
-      'type': 'video',
-    },
-    {
-      'title': 'Ara Quiz - İşaret Tanıma',
-      'duration': '10 Soru',
-      'isCompleted': false,
-      'isLocked': false,
-      'type': 'quiz',
-    },
-    {
-      'title': 'Yol Çizgileri ve Anlamları',
-      'duration': '14:30',
-      'isCompleted': false,
-      'isLocked': true,
-      'type': 'video',
-    },
-    {
-      'title': 'Kavşak Kuralları',
-      'duration': '22:10',
-      'isCompleted': false,
-      'isLocked': true,
-      'type': 'video',
-    },
-    {
-      'title': 'Final Quiz',
-      'duration': '25 Soru',
-      'isCompleted': false,
-      'isLocked': true,
-      'type': 'quiz',
-    },
-  ];
+
 
   // Yorumlar
   final List<Map<String, dynamic>> reviews = [
@@ -136,26 +169,30 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: Column(
-              children: [
-                // Modern AppBar
-                _buildModernAppBar(),
-                
-                // Course Header
-                _buildCourseHeader(),
-                
-                // Tab Selector
-                _buildTabSelector(),
-                
-                // Content
-                Expanded(
-                  child: _buildTabContent(),
-                ),
-                
-                // Bottom Action Button
-                _buildBottomActionButton(),
-              ],
-            ),
+            child: isLoading 
+                ? _buildLoadingState()
+                : errorMessage != null
+                    ? _buildErrorState()
+                    : Column(
+                        children: [
+                          // Modern AppBar
+                          _buildModernAppBar(),
+                          
+                          // Course Header
+                          _buildCourseHeader(),
+                          
+                          // Tab Selector
+                          _buildTabSelector(),
+                          
+                          // Content
+                          Expanded(
+                            child: _buildTabContent(),
+                          ),
+                          
+                          // Bottom Action Button
+                          _buildBottomActionButton(),
+                        ],
+                      ),
           ),
         ),
       ),
@@ -241,7 +278,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.course['title'],
+                      courseDetail?['title'] ?? widget.course['title'],
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -250,7 +287,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.course['category'],
+                      courseDetail?['category'] ?? widget.course['category'],
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.blue[600],
@@ -316,7 +353,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
                 child: _buildStatItem(
                   icon: Icons.assignment_outlined,
                   label: 'Dersler',
-                  value: '${widget.course['lessons']} ders',
+                  value: '${lessons.length} ders',
                 ),
               ),
               Expanded(
@@ -412,6 +449,38 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
   }
 
   Widget _buildLessonsList() {
+    if (lessons.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.video_library_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Bu kursta henüz ders bulunmuyor',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Dersler eklendiğinde burada görünecek',
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: lessons.length,
@@ -911,6 +980,57 @@ class _CourseDetailPageState extends State<CourseDetailPage> with TickerProvider
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Kurs detayları yükleniyor...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Kurs detayları yüklenemedi',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            errorMessage!,
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: loadCourseDetail,
+            child: const Text('Tekrar Dene'),
+          ),
+        ],
       ),
     );
   }

@@ -24,13 +24,13 @@ public class QuizzesController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> List()
     {
-        Guid drivingSchoolId;
+        Guid drivingSchoolId = Guid.Empty;
         var claim = User.FindFirst("DrivingSchoolId")?.Value;
         if (claim != null && Guid.TryParse(claim, out var parsedId))
             drivingSchoolId = parsedId;
-        else
-            drivingSchoolId = Guid.Empty; // veya bir default/anonim tenant
-        var quizzes = await _quizService.ListQuizzesAsync(drivingSchoolId);
+        
+        // GEÇİCİ: Tüm quiz'leri döndür (DrivingSchoolId filtresi kaldırıldı)
+        var quizzes = await _db.Quizzes.ToListAsync();
         
         // Test verileri ekle (eğer hiç quiz yoksa)
         if (!quizzes.Any())

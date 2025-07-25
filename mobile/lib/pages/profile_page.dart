@@ -12,6 +12,11 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
+  // Backend verilerini tutacak değişkenler
+  Map<String, dynamic>? userProfile;
+  bool isLoading = true;
+  String? errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -23,6 +28,34 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
     _fadeController.forward();
+    
+    loadUserProfile();
+  }
+
+  Future<void> loadUserProfile() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      final profile = await ApiService.getUserProfile();
+      
+      if (profile != null) {
+        setState(() {
+          userProfile = profile;
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Profil bilgileri alınamadı');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Profil yüklenirken hata oluştu: ${e.toString()}';
+      });
+      print('Profil yükleme hatası: $e');
+    }
   }
 
   @override
@@ -31,57 +64,73 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     super.dispose();
   }
 
-  // Kullanıcı bilgileri
-  final Map<String, dynamic> userInfo = {
-    'firstName': 'Ahmet',
-    'lastName': 'Yılmaz',
-    'email': 'ahmet.yilmaz@email.com',
-    'role': 'Student',
-    'joinDate': '15 Ekim 2024',
-    'avatar': 'AY',
-  };
+  // Profil bilgilerini backend'den alacağız artık
+  Map<String, dynamic> get userInfo {
+    if (userProfile == null) {
+      return {
+        'firstName': 'Yükleniyor',
+        'lastName': '',
+        'email': 'yükleniyor@example.com',
+        'role': 'Student',
+        'joinDate': 'Yükleniyor...',
+        'avatar': 'YY',
+      };
+    }
 
-  // İstatistikler
-  final Map<String, int> stats = {
-    'completedCourses': 3,
-    'totalCourses': 5,
-    'completedQuizzes': 12,
-    'studyHours': 42,
-    'averageScore': 85,
-    'streak': 7,
-  };
+    final fullName = userProfile!['fullName'] ?? 'Bilinmiyor';
+    final nameParts = fullName.split(' ');
+    final firstName = nameParts.isNotEmpty ? nameParts[0] : 'Bilinmiyor';
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+    
+    return {
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': userProfile!['email'] ?? 'email@example.com',
+      'role': userProfile!['role'] ?? 'Student',
+      'joinDate': _formatDate(userProfile!['createdAt']),
+      'avatar': _createAvatarText(fullName),
+      'tcNumber': userProfile!['tcNumber'],
+      'phone': userProfile!['phone'],
+      'drivingSchoolId': userProfile!['drivingSchoolId'],
+    };
+  }
 
-  // Başarılar
-  final List<Map<String, dynamic>> achievements = [
-    {
-      'title': 'İlk Adım',
-      'description': 'İlk kursu tamamladı',
-      'icon': Icons.flag,
-      'color': Colors.green,
-      'isUnlocked': true,
-    },
-    {
-      'title': 'Azimli Öğrenci',
-      'description': '7 gün üst üste çalış',
-      'icon': Icons.local_fire_department,
-      'color': Colors.orange,
-      'isUnlocked': true,
-    },
-    {
-      'title': 'Sınav Ustası',
-      'description': '10 sınav tamamla',
-      'icon': Icons.star,
-      'color': Colors.purple,
-      'isUnlocked': true,
-    },
-    {
-      'title': 'Mükemmeliyetçi',
-      'description': 'Tüm kursları bitir',
-      'icon': Icons.emoji_events,
-      'color': Colors.amber,
-      'isUnlocked': false,
-    },
-  ];
+
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'Bilinmiyor';
+    
+    try {
+      DateTime parsedDate;
+      if (date is String) {
+        parsedDate = DateTime.parse(date);
+      } else {
+        return 'Bilinmiyor';
+      }
+      
+      final months = [
+        'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+      ];
+      
+      return '${parsedDate.day} ${months[parsedDate.month - 1]} ${parsedDate.year}';
+    } catch (e) {
+      return 'Bilinmiyor';
+    }
+  }
+
+  String _createAvatarText(String fullName) {
+    if (fullName.isEmpty) return 'YY';
+    
+    final words = fullName.trim().split(' ');
+    if (words.length == 1) {
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+      return '${words[0][0]}${words[1][0]}'.toUpperCase();
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -90,45 +139,42 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
-          child: Column(
-            children: [
-              // AppBar
-              _buildAppBar(),
-              
-              // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Profile Header
-                      _buildProfileHeader(),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Stats
-                      _buildStats(),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Achievements
-                      _buildAchievements(),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Profile Options
-                      _buildProfileOptions(),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Logout Button
-                      _buildLogoutButton(),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          child: isLoading 
+              ? _buildLoadingState()
+              : errorMessage != null
+                  ? _buildErrorState()
+                  : Column(
+                      children: [
+                        // AppBar
+                        _buildAppBar(),
+                        
+                        // Content
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: loadUserProfile,
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(16),
+                                                              child: Column(
+                                  children: [
+                                    // Profile Header
+                                    _buildProfileHeader(),
+                                    
+                                    const SizedBox(height: 20),
+                                    
+                                    // Profile Options
+                                    _buildProfileOptions(),
+                                    
+                                    const SizedBox(height: 20),
+                                    
+                                    // Logout Button
+                                    _buildLogoutButton(),
+                                  ],
+                                ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
         ),
       ),
     );
@@ -280,233 +326,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildStats() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            spreadRadius: 0,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.analytics_outlined, color: Colors.blue[600], size: 24),
-              const SizedBox(width: 8),
-              Text(
-                'İstatistikler',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 20),
-          
-          // Stats Grid
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            childAspectRatio: 2.2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: [
-              _buildStatCard(
-                'Tamamlanan Kurs',
-                '${stats['completedCourses']}/${stats['totalCourses']}',
-                Icons.book_outlined,
-                Colors.blue,
-              ),
-              _buildStatCard(
-                'Çalışma Saati',
-                '${stats['studyHours']}h',
-                Icons.schedule_outlined,
-                Colors.green,
-              ),
-              _buildStatCard(
-                'Ortalama Puan',
-                '%${stats['averageScore']}',
-                Icons.trending_up_outlined,
-                Colors.purple,
-              ),
-              _buildStatCard(
-                'Günlük Seri',
-                '${stats['streak']} gün',
-                Icons.local_fire_department_outlined,
-                Colors.orange,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildStatCard(String label, String value, IconData icon, MaterialColor color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color[100]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color[600], size: 18),
-              const Spacer(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: color[700],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: color[700],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAchievements() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            spreadRadius: 0,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.emoji_events_outlined, color: Colors.blue[600], size: 24),
-              const SizedBox(width: 8),
-              Text(
-                'Başarılar',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${achievements.where((a) => a['isUnlocked']).length}/${achievements.length}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Achievements Grid
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            childAspectRatio: 1.4,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            children: achievements.map((achievement) {
-              return _buildAchievementCard(achievement);
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAchievementCard(Map<String, dynamic> achievement) {
-    final isUnlocked = achievement['isUnlocked'];
-    
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isUnlocked ? achievement['color'][50] : Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isUnlocked ? achievement['color'][200] : Colors.grey[200]!,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isUnlocked ? achievement['color'] : Colors.grey[400],
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              achievement['icon'],
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            achievement['title'],
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isUnlocked ? achievement['color'][700] : Colors.grey[600],
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            achievement['description'],
-            style: TextStyle(
-              fontSize: 10,
-              color: isUnlocked ? Colors.grey[600] : Colors.grey[500],
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildProfileOptions() {
     final options = [
@@ -778,6 +598,57 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           ],
         );
       },
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Profil bilgileri yükleniyor...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Profil yüklenemedi',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            errorMessage!,
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: loadUserProfile,
+            child: const Text('Tekrar Dene'),
+          ),
+        ],
+      ),
     );
   }
 } 

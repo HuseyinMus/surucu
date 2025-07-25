@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'course_detail_page.dart';
+import '../services/api_service.dart';
 
 class CoursesPage extends StatefulWidget {
   const CoursesPage({super.key});
@@ -12,63 +13,229 @@ class _CoursesPageState extends State<CoursesPage> {
   String selectedCategory = 'Tümü';
   final List<String> categories = ['Tümü', 'Teori', 'Pratik', 'Sınav', 'Video'];
 
-  // Örnek kurs verileri
-  final List<Map<String, dynamic>> courses = [
-    {
-      'title': 'Trafik Kuralları',
-      'category': 'Teori',
-      'progress': 75,
-      'duration': '2 saat 30 dk',
-      'lessons': 12,
-      'color': Colors.blue,
-      'icon': Icons.traffic,
-      'isCompleted': false,
-    },
-    {
-      'title': 'Direksiyon Teknikleri',
-      'category': 'Pratik',
-      'progress': 45,
-      'duration': '4 saat',
-      'lessons': 8,
-      'color': Colors.green,
-      'icon': Icons.drive_eta,
-      'isCompleted': false,
-    },
-    {
-      'title': 'Park Etme Sanatı',
-      'category': 'Pratik',
-      'progress': 100,
-      'duration': '1 saat 45 dk',
-      'lessons': 6,
-      'color': Colors.orange,
-      'icon': Icons.local_parking,
-      'isCompleted': true,
-    },
-    {
-      'title': 'Ehliyet Sınavı Hazırlık',
-      'category': 'Sınav',
-      'progress': 30,
-      'duration': '3 saat',
-      'lessons': 15,
-      'color': Colors.purple,
-      'icon': Icons.quiz,
-      'isCompleted': false,
-    },
-    {
-      'title': 'Güvenli Sürüş',
-      'category': 'Video',
-      'progress': 60,
-      'duration': '2 saat',
-      'lessons': 10,
-      'color': Colors.red,
-      'icon': Icons.security,
-      'isCompleted': false,
-    },
-  ];
+  List<Map<String, dynamic>> courses = [];
+  bool isLoading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    loadCourses();
+  }
+
+  Future<void> loadCourses() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      final coursesData = await ApiService.getCourses();
+      
+      if (coursesData != null) {
+        setState(() {
+          courses = coursesData.map((course) => {
+            'id': course['id'],
+            'title': course['title'] ?? 'Başlıksız Kurs',
+            'description': course['description'] ?? '',
+            'category': _mapCourseCategory(course['category']?.toString() ?? course['courseType']?.toString() ?? ''),
+            'progress': _calculateProgress(course),
+            'duration': course['duration'] != null ? '${course['duration']} saat' : '2 saat', // Test için varsayılan
+            'lessons': (course['courseContents'] as List?)?.length ?? (course['contents'] as List?)?.length ?? 5, // Test için varsayılan
+            'color': _getCourseColor(course['category']?.toString() ?? course['courseType']?.toString() ?? ''),
+            'icon': _getCourseIcon(course['category']?.toString() ?? course['courseType']?.toString() ?? ''),
+            'isCompleted': course['isCompleted'] ?? false,
+            'createdAt': course['createdAt'],
+          }).toList();
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Kurslar yüklenemedi');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Kurslar yüklenirken hata oluştu: ${e.toString()}';
+      });
+      print('Kurslar yükleme hatası: $e');
+    }
+  }
+
+  String _mapCourseCategory(String backendCategory) {
+    switch (backendCategory.toLowerCase()) {
+      case 'theory':
+      case 'teori':
+      case '0': // CourseType.Theory
+        return 'Teori';
+      case 'practical':
+      case 'practice':
+      case 'pratik':
+      case '1': // CourseType.Practice
+        return 'Pratik';
+      case 'exam':
+      case 'sinav':
+        return 'Sınav';
+      case 'video':
+        return 'Video';
+      default:
+        return 'Teori';
+    }
+  }
+
+  int _calculateProgress(Map<String, dynamic> course) {
+    // Backend'den progress bilgisi geliyorsa onu kullan
+    if (course['progress'] != null) {
+      return (course['progress'] as num).toInt();
+    }
+    
+    // Yoksa contents'e göre hesapla (örnek)
+    final contents = course['contents'] as List?;
+    if (contents != null && contents.isNotEmpty) {
+      final completedCount = contents.where((c) => c['isCompleted'] == true).length;
+      return ((completedCount / contents.length) * 100).toInt();
+    }
+    
+    return 0;
+  }
+
+  MaterialColor _getCourseColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'theory':
+      case 'teori':
+      case '0': // CourseType.Theory
+        return Colors.blue;
+      case 'practical':
+      case 'practice':
+      case 'pratik':
+      case '1': // CourseType.Practice
+        return Colors.green;
+      case 'exam':
+      case 'sinav':
+        return Colors.purple;
+      case 'video':
+        return Colors.red;
+      default:
+        return Colors.blue;
+    }
+  }
+
+  IconData _getCourseIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'theory':
+      case 'teori':
+      case '0': // CourseType.Theory
+        return Icons.book;
+      case 'practical':
+      case 'practice':
+      case 'pratik':
+      case '1': // CourseType.Practice
+        return Icons.drive_eta;
+      case 'exam':
+      case 'sinav':
+        return Icons.quiz;
+      case 'video':
+        return Icons.play_circle;
+      default:
+        return Icons.book;
+    }
+  }
 
   List<Map<String, dynamic>> get filteredCourses {
     if (selectedCategory == 'Tümü') return courses;
     return courses.where((course) => course['category'] == selectedCategory).toList();
+  }
+
+  Widget _buildCoursesContent() {
+    if (isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Kurslar yükleniyor...'),
+          ],
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Kurslar yüklenemedi',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage!,
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: loadCourses,
+              child: const Text('Tekrar Dene'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredCourses.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.book_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              selectedCategory == 'Tümü' ? 'Henüz kurs bulunmuyor' : 'Bu kategoride kurs bulunmuyor',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Yeni kurslar eklendiğinde burada görünecek',
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: filteredCourses.length,
+      itemBuilder: (context, index) {
+        return _buildModernCourseCard(filteredCourses[index], index);
+      },
+    );
   }
 
   @override
@@ -98,22 +265,13 @@ class _CoursesPageState extends State<CoursesPage> {
               // Category Chips
               _buildCategoryChips(),
               
-              // Courses List
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    await Future.delayed(const Duration(seconds: 1));
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredCourses.length,
-                    itemBuilder: (context, index) {
-                      return _buildModernCourseCard(filteredCourses[index], index);
-                    },
+                              // Courses List
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: loadCourses,
+                    child: _buildCoursesContent(),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -145,7 +303,7 @@ class _CoursesPageState extends State<CoursesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                const                 Text(
                   'Kurslarım',
                   style: TextStyle(
                     color: Colors.white,
@@ -154,7 +312,7 @@ class _CoursesPageState extends State<CoursesPage> {
                   ),
                 ),
                 Text(
-                  '${courses.length} kurs mevcut',
+                  isLoading ? 'Yükleniyor...' : '${courses.length} kurs mevcut',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
                     fontSize: 14,

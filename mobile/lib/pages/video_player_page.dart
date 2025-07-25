@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import '../services/api_service.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -24,13 +25,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool showControls = true;
   Timer? hideControlsTimer;
 
-  // Örnek video listesi
-  late List<Map<String, dynamic>> courseVideos;
+  // Backend'den gelecek video listesi
+  List<Map<String, dynamic>> courseVideos = [];
+  bool isLoadingVideos = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeCourseVideos();
+    _loadCourseContents();
     _startHideControlsTimer();
   }
 
@@ -41,37 +43,162 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     super.dispose();
   }
 
-  void _initializeCourseVideos() {
-    courseVideos = [
-      {
-        'id': 1,
-        'title': 'Temel Trafik Kuralları',
-        'duration': '12:30',
-        'isCompleted': true,
-        'isLocked': false,
-      },
-      {
-        'id': 2,
-        'title': 'Kavşak Geçiş Kuralları',
-        'duration': '8:45',
-        'isCompleted': false,
-        'isLocked': false,
-      },
-      {
-        'id': 3,
-        'title': 'Park Etme Teknikleri',
-        'duration': '15:20',
-        'isCompleted': false,
-        'isLocked': false,
-      },
-      {
-        'id': 4,
-        'title': 'Gece Sürüş',
-        'duration': '10:15',
-        'isCompleted': false,
-        'isLocked': true,
-      },
-    ];
+  Future<void> _loadCourseContents() async {
+    try {
+      setState(() {
+        isLoadingVideos = true;
+      });
+
+      final courseId = widget.course['id'];
+      if (courseId != null) {
+        final courseDetail = await ApiService.getCourseDetail(courseId);
+        
+        if (courseDetail != null && courseDetail['courseContents'] != null) {
+          setState(() {
+            courseVideos = (courseDetail['courseContents'] as List).asMap().entries.map((entry) {
+              int index = entry.key;
+              var content = entry.value;
+              
+              return {
+                'id': content['id'],
+                'title': content['title'] ?? 'Başlıksız İçerik',
+                'description': content['description'] ?? '',
+                'duration': _formatContentDuration(content['duration']),
+                'isCompleted': false, // TODO: Progress API'den gelecek
+                'isLocked': index > 2, // İlk 3 içerik açık
+                'contentUrl': content['contentUrl'] ?? '',
+                'contentType': content['contentType'] ?? 0,
+                'order': content['order'] ?? index,
+              };
+            }).toList()..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
+            
+            isLoadingVideos = false;
+          });
+        } else {
+          // Fallback: Mevcut lesson'ı tek video olarak göster
+          setState(() {
+            courseVideos = [
+              {
+                'id': widget.lesson['id'] ?? 'current',
+                'title': widget.lesson['title'] ?? 'Mevcut Ders',
+                'duration': widget.lesson['duration'] ?? '5:00',
+                'isCompleted': false,
+                'isLocked': false,
+                'contentUrl': widget.lesson['contentUrl'] ?? '',
+                'contentType': widget.lesson['type'] ?? 'video',
+              }
+            ];
+            isLoadingVideos = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Kurs içerikleri yüklenirken hata: $e');
+      // Hata olursa mevcut lesson'ı göster
+      setState(() {
+        courseVideos = [
+          {
+            'id': widget.lesson['id'] ?? 'current',
+            'title': widget.lesson['title'] ?? 'Mevcut Ders',
+            'duration': widget.lesson['duration'] ?? '5:00',
+            'isCompleted': false,
+            'isLocked': false,
+            'contentUrl': widget.lesson['contentUrl'] ?? '',
+            'contentType': widget.lesson['type'] ?? 'video',
+          }
+        ];
+        isLoadingVideos = false;
+      });
+    }
+  }
+
+  String _formatContentDuration(dynamic duration) {
+    if (duration == null) return '5:00';
+    
+    if (duration is String) {
+      // Backend'den string olarak gelirse parse et
+      final parts = duration.split(':');
+      if (parts.length >= 2) {
+        return duration;
+      }
+    } else if (duration is int) {
+      // Saniye cinsinden gelirse dakika:saniye formatına çevir
+      final minutes = (duration / 60).floor();
+      final seconds = duration % 60;
+      return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    
+    return '5:00'; // Varsayılan
+  }
+
+  String _mapContentTypeToString(dynamic contentType) {
+    if (contentType == null) return 'video';
+    
+    final typeStr = contentType.toString();
+    switch (typeStr) {
+      case '0':
+        return 'video';
+      case '1':
+        return 'text';
+      case '2':
+        return 'quiz';
+      default:
+        return 'video';
+    }
+  }
+
+  Widget _buildVideoContent() {
+    final hasVideoUrl = widget.lesson['contentUrl'] != null && 
+                       widget.lesson['contentUrl'].toString().isNotEmpty;
+    
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            hasVideoUrl ? Icons.play_circle_filled : Icons.video_library_outlined,
+            size: 60,
+            color: Colors.white.withOpacity(0.3),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasVideoUrl 
+                ? 'Video Hazır - Oynatmak için tıklayın'
+                : 'Video URL bulunamadı',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (hasVideoUrl) ...[
+            const SizedBox(height: 12),
+            Text(
+              'URL: ${widget.lesson['contentUrl']}',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _togglePlayPause() {
@@ -191,39 +318,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         color: Colors.black,
         child: Stack(
           children: [
-            // Video Placeholder
-            Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.grey[800]!,
-                    Colors.grey[900]!,
-                  ],
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.play_circle_filled,
-                    size: 60,
-                    color: Colors.white.withOpacity(0.3),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Video Oynatılıyor...',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Video Content
+            _buildVideoContent(),
             
             // Top Controls
             if (showControls)
@@ -582,12 +678,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: ListView.separated(
+            child: isLoadingVideos
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.separated(
               itemCount: courseVideos.length,
               separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final video = courseVideos[index];
-                final isCurrentVideo = video['title'] == widget.lesson['title'];
+                final isCurrentVideo = video['title'] == widget.lesson['title'] || 
+                                     video['id'] == widget.lesson['id'];
                 
                 return GestureDetector(
                   onTap: video['isLocked'] ? null : () {
@@ -596,7 +695,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => VideoPlayerPage(
-                            lesson: video,
+                            lesson: {
+                              'id': video['id'],
+                              'title': video['title'],
+                              'duration': video['duration'],
+                              'contentUrl': video['contentUrl'],
+                              'type': _mapContentTypeToString(video['contentType']),
+                            },
                             course: widget.course,
                           ),
                         ),
